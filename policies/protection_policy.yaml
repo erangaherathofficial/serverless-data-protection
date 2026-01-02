@@ -1,0 +1,68 @@
+version: "1.0"
+description: "Default protection policy for PII entities"
+
+settings:
+  default_protection: masking
+  confidence_threshold: 0.7
+  preserve_schema: true
+
+rules:
+  - entity_type: EMAIL_ADDRESS
+    protection_method: sha256_hash
+    priority: 1
+    description: "Hash email addresses for pseudonymization"
+
+  - entity_type: PHONE_NUMBER
+    protection_method: masking
+    priority: 2
+    options:
+      mask_char: "*"
+      visible_chars: 4
+      direction: right
+    description: "Mask phone numbers keeping last 4 digits"
+
+  - entity_type: CREDIT_CARD
+    protection_method: aes256_encrypt
+    priority: 1
+    description: "Encrypt credit card numbers with AES-256"
+
+  - entity_type: UK_NHS
+    protection_method: tokenization
+    priority: 1
+    description: "Tokenize UK NHS numbers"
+
+  - entity_type: PERSON
+    protection_method: masking
+    priority: 3
+    options:
+      mask_char: "X"
+      visible_chars: 1
+      direction: left
+    description: "Mask person names keeping first initial"
+
+  - entity_type: LOCATION
+    protection_method: masking
+    priority: 4
+    options:
+      mask_char: "*"
+      visible_chars: 0
+    description: "Fully mask location data"
+
+  - entity_type: DATE_TIME
+    protection_method: masking
+    priority: 5
+    options:
+      mask_char: "*"
+      visible_chars: 4
+      direction: left
+    description: "Mask dates keeping year"
+
+  - entity_type: IP_ADDRESS
+    protection_method: sha256_hash
+    priority: 2
+    description: "Hash IP addresses"
+
+  - entity_type: IBAN_CODE
+    protection_method: aes256_encrypt
+    priority: 1
+    description: "Encrypt IBAN codes"
