@@ -298,8 +298,10 @@ class SchemaValidator:
                 )
             elif self._allow_type_widening:
                 if self._is_valid_type_conversion(orig_dtype, prot_dtype):
-                    msg = f"Type widened for '{col}': " \
-                          f"{orig_dtype} -> {prot_dtype}"
+                    msg = (
+                        f"Type widened for '{col}': "
+                        f"{orig_dtype} -> {prot_dtype}"
+                    )
                     result.add_info(
                         msg,
                         column=col,
@@ -309,8 +311,10 @@ class SchemaValidator:
                         }
                     )
                 else:
-                    msg = f"Unexpected type change for '{col}': " \
-                          f"{orig_dtype} -> {prot_dtype}"
+                    msg = (
+                        f"Unexpected type change for '{col}': "
+                        f"{orig_dtype} -> {prot_dtype}"
+                    )
                     result.add_warning(
                         msg,
                         column=col,
@@ -328,8 +332,10 @@ class SchemaValidator:
     ) -> None:
         """Validate row count matches."""
         if original.row_count != protected.row_count:
-            msg = f"Row count mismatch: {original.row_count} " \
-                  f"-> {protected.row_count}"
+            msg = (
+                f"Row count mismatch: {original.row_count} "
+                f"-> {protected.row_count}"
+            )
             result.add_error(
                 msg,
                 details={

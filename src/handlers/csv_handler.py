@@ -77,8 +77,10 @@ class CSVHandler(BaseHandler):
 
             for i, row in enumerate(rows[1:], start=2):
                 if len(row) != header_count:
-                    msg = f"Row {i} has {len(row)} columns, " \
-                          f"expected {header_count}"
+                    msg = (
+                        f"Row {i} has {len(row)} columns, "
+                        f"expected {header_count}"
+                    )
                     self._add_validation_error(msg)
                     return False
 
