@@ -409,7 +409,7 @@ class TestAuditIntegration:
     def test_full_audit_flow(self):
         """Test complete audit flow."""
         logger = CloudWatchLogger(enable_metrics=False)
-        DynamoDBWriter(table_name='')
+        _ = DynamoDBWriter(table_name='')
 
         logger.log_processing_start(
             request_id='req-123',

@@ -112,8 +112,10 @@ class RuleEvaluator:
 
         for entity in detection_result.entities:
             if not self._meets_threshold(entity):
-                msg = f"Entity {entity.entity_type} below threshold: " \
-                      f"{entity.score}"
+                msg = (
+                    f"Entity {entity.entity_type} below threshold: "
+                    f"{entity.score}"
+                )
                 logger.debug(msg)
                 continue
 

@@ -356,8 +356,10 @@ class PolicyParser:
 
         if 'direction' in options:
             if options['direction'] not in self.VALID_DIRECTIONS:
-                msg = f"{prefix}: direction must be one of " \
-                      f"{self.VALID_DIRECTIONS}"
+                msg = (
+                    f"{prefix}: direction must be one of "
+                    f"{self.VALID_DIRECTIONS}"
+                )
                 self._validation_errors.append(msg)
 
     def _validate_settings(self, settings: dict) -> None:
@@ -373,8 +375,10 @@ class PolicyParser:
         if 'default_protection' in settings:
             default_prot = settings['default_protection']
             if default_prot not in self.VALID_PROTECTION_METHODS:
-                msg = "Invalid default_protection. " \
-                      f"Valid: {self.VALID_PROTECTION_METHODS}"
+                msg = (
+                    "Invalid default_protection. "
+                    f"Valid: {self.VALID_PROTECTION_METHODS}"
+                )
                 self._validation_errors.append(msg)
 
     def _build_policy(self, data: dict) -> Policy:
