@@ -25,11 +25,15 @@ class ProtectionStrategy(Protocol):
 class ProtectionPlan:
     """Plan for protecting a DataFrame."""
 
-    column_plans: dict[str, 'ColumnProtectionPlan'] = field(default_factory=dict)
+    column_plans: dict[str, 'ColumnProtectionPlan'] = field(
+        default_factory=dict
+    )
     total_entities: int = 0
     total_protections: int = 0
 
-    def add_column_plan(self, column: str, plan: 'ColumnProtectionPlan') -> None:
+    def add_column_plan(
+        self, column: str, plan: 'ColumnProtectionPlan'
+    ) -> None:
         """Add protection plan for column."""
         self.column_plans[column] = plan
         self.total_protections += len(plan.cell_actions)
@@ -99,7 +103,10 @@ class ColumnProtectionPlan:
 
 
 class ProtectionMapper:
-    """Maps detected PII to protection strategies and creates execution plans."""
+    """Maps detected PII to protection strategies.
+
+    Creates execution plans for applying protections.
+    """
 
     def __init__(self, policy: Policy) -> None:
         """Initialize mapper with policy.
@@ -132,13 +139,13 @@ class ProtectionMapper:
 
     def create_protection_plan(
         self,
-        df: pd.DataFrame,
+        _df: pd.DataFrame,
         detection_result: DetectionResult
     ) -> ProtectionPlan:
         """Create protection plan from detection results.
 
         Args:
-            df: Source DataFrame
+            _df: Source DataFrame (reserved for future validation)
             detection_result: PII detection results
 
         Returns:
@@ -283,7 +290,7 @@ class ProtectionPlanExecutor:
 
         Args:
             method_name: Protection method name
-            func: Function taking (value, options) and returning protected value
+            func: Function (value, options) -> protected value
         """
         self._apply_functions[method_name] = func
 

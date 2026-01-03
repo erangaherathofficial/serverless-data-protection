@@ -88,7 +88,7 @@ class BaseHandler(ABC):
         Returns:
             True if valid, False otherwise
         """
-        pass
+        ...
 
     @abstractmethod
     def parse(self, content: bytes) -> pd.DataFrame:
@@ -100,7 +100,7 @@ class BaseHandler(ABC):
         Returns:
             Parsed DataFrame
         """
-        pass
+        ...
 
     @abstractmethod
     def serialize(self, df: pd.DataFrame) -> bytes:
@@ -112,12 +112,12 @@ class BaseHandler(ABC):
         Returns:
             Serialized bytes
         """
-        pass
+        ...
 
     @abstractmethod
     def get_content_type(self) -> str:
         """Get MIME content type for this format."""
-        pass
+        ...
 
     def _extract_metadata(self, df: pd.DataFrame, content: bytes,
                           file_name: str) -> FileMetadata:
@@ -146,7 +146,7 @@ class BaseHandler(ABC):
     @abstractmethod
     def _get_format_name(self) -> str:
         """Get human-readable format name."""
-        pass
+        ...
 
     def _add_validation_error(self, error: str) -> None:
         """Add a validation error message."""

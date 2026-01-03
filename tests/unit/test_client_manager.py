@@ -1,7 +1,5 @@
 """Unit tests for AWS Client Manager."""
 
-import pytest
-
 from src.aws.client_manager import AWSClientManager, get_client_manager
 
 
@@ -43,7 +41,9 @@ class TestAWSClientManager:
         _ = manager.s3
         assert manager._s3_client is not None
 
-    def test_dynamodb_client_lazy_initialization(self, env_vars, aws_credentials):
+    def test_dynamodb_client_lazy_initialization(
+        self, env_vars, aws_credentials
+    ):
         """Verify DynamoDB client is lazily initialized."""
         manager = get_client_manager()
         assert manager._dynamodb_client is None

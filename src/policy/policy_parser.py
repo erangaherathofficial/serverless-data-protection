@@ -94,9 +94,13 @@ class PolicySettings:
             preserve_schema=data.get('preserve_schema', True),
             fail_on_error=data.get('fail_on_error', False),
             log_detections=data.get('log_detections', True),
-            extra={k: v for k, v in data.items()
-                   if k not in ['default_protection', 'confidence_threshold',
-                                'preserve_schema', 'fail_on_error', 'log_detections']}
+            extra={
+                k: v for k, v in data.items()
+                if k not in [
+                    'default_protection', 'confidence_threshold',
+                    'preserve_schema', 'fail_on_error', 'log_detections'
+                ]
+            }
         )
 
 
@@ -110,7 +114,9 @@ class Policy:
     rules: list[ProtectionRule]
     metadata: dict = field(default_factory=dict)
 
-    def get_rule_for_entity(self, entity_type: str) -> Optional[ProtectionRule]:
+    def get_rule_for_entity(
+        self, entity_type: str
+    ) -> Optional[ProtectionRule]:
         """Get highest priority rule for entity type."""
         matching = [r for r in self.rules if r.entity_type == entity_type]
         if not matching:
@@ -229,7 +235,8 @@ class PolicyParser:
             raise PolicyValidationError(f"Invalid YAML in {source}: {e}")
 
         if not isinstance(data, dict):
-            raise PolicyValidationError(f"Policy must be a YAML mapping in {source}")
+            msg = f"Policy must be a YAML mapping in {source}"
+            raise PolicyValidationError(msg)
 
         self._validate_policy(data)
 
@@ -301,26 +308,34 @@ class PolicyParser:
                 continue
 
             if 'entity_type' not in rule:
-                self._validation_errors.append(f"{prefix}: Missing entity_type")
+                msg = f"{prefix}: Missing entity_type"
+                self._validation_errors.append(msg)
             else:
                 entity_type = rule['entity_type']
                 if entity_type in entity_types_seen:
-                    logger.warning(f"Duplicate rule for entity type: {entity_type}")
+                    msg = f"Duplicate rule for entity type: {entity_type}"
+                    logger.warning(msg)
                 entity_types_seen.add(entity_type)
 
             if 'protection_method' not in rule:
-                self._validation_errors.append(f"{prefix}: Missing protection_method")
-            elif rule['protection_method'] not in self.VALID_PROTECTION_METHODS:
-                self._validation_errors.append(
-                    f"{prefix}: Invalid protection_method '{rule['protection_method']}'. "
-                    f"Valid: {self.VALID_PROTECTION_METHODS}"
-                )
+                msg = f"{prefix}: Missing protection_method"
+                self._validation_errors.append(msg)
+            else:
+                method = rule['protection_method']
+                if method not in self.VALID_PROTECTION_METHODS:
+                    msg = (
+                        f"{prefix}: Invalid protection_method '{method}'. "
+                        f"Valid: {self.VALID_PROTECTION_METHODS}"
+                    )
+                    self._validation_errors.append(msg)
 
             if 'priority' in rule:
-                if not isinstance(rule['priority'], int) or rule['priority'] < 1:
-                    self._validation_errors.append(
-                        f"{prefix}: priority must be positive integer"
-                    )
+                is_valid = (
+                    isinstance(rule['priority'], int) and rule['priority'] >= 1
+                )
+                if not is_valid:
+                    msg = f"{prefix}: priority must be positive integer"
+                    self._validation_errors.append(msg)
 
             if 'options' in rule:
                 self._validate_options(rule['options'], prefix)
@@ -328,37 +343,39 @@ class PolicyParser:
     def _validate_options(self, options: dict, prefix: str) -> None:
         """Validate protection options."""
         if 'visible_chars' in options:
-            if not isinstance(options['visible_chars'], int) or options['visible_chars'] < 0:
-                self._validation_errors.append(
-                    f"{prefix}: visible_chars must be non-negative integer"
-                )
+            val = options['visible_chars']
+            if not isinstance(val, int) or val < 0:
+                msg = f"{prefix}: visible_chars must be non-negative integer"
+                self._validation_errors.append(msg)
 
         if 'mask_char' in options:
-            if not isinstance(options['mask_char'], str) or len(options['mask_char']) != 1:
-                self._validation_errors.append(
-                    f"{prefix}: mask_char must be single character"
-                )
+            val = options['mask_char']
+            if not isinstance(val, str) or len(val) != 1:
+                msg = f"{prefix}: mask_char must be single character"
+                self._validation_errors.append(msg)
 
         if 'direction' in options:
             if options['direction'] not in self.VALID_DIRECTIONS:
-                self._validation_errors.append(
-                    f"{prefix}: direction must be one of {self.VALID_DIRECTIONS}"
-                )
+                msg = f"{prefix}: direction must be one of " \
+                      f"{self.VALID_DIRECTIONS}"
+                self._validation_errors.append(msg)
 
     def _validate_settings(self, settings: dict) -> None:
         """Validate policy settings."""
         if 'confidence_threshold' in settings:
             threshold = settings['confidence_threshold']
-            if not isinstance(threshold, (int, float)) or not 0 <= threshold <= 1:
-                self._validation_errors.append(
-                    "confidence_threshold must be between 0 and 1"
-                )
+            valid_type = isinstance(threshold, (int, float))
+            in_range = 0 <= threshold <= 1 if valid_type else False
+            if not valid_type or not in_range:
+                msg = "confidence_threshold must be between 0 and 1"
+                self._validation_errors.append(msg)
 
         if 'default_protection' in settings:
-            if settings['default_protection'] not in self.VALID_PROTECTION_METHODS:
-                self._validation_errors.append(
-                    f"Invalid default_protection. Valid: {self.VALID_PROTECTION_METHODS}"
-                )
+            default_prot = settings['default_protection']
+            if default_prot not in self.VALID_PROTECTION_METHODS:
+                msg = "Invalid default_protection. " \
+                      f"Valid: {self.VALID_PROTECTION_METHODS}"
+                self._validation_errors.append(msg)
 
     def _build_policy(self, data: dict) -> Policy:
         """Build Policy object from validated data."""

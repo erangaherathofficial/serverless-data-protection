@@ -59,11 +59,13 @@ class ParquetHandler(BaseHandler):
             return False
 
         if content[:4] != b'PAR1':
-            self._add_validation_error("Invalid Parquet magic bytes (missing PAR1 header)")
+            msg = "Invalid Parquet magic bytes (missing PAR1 header)"
+            self._add_validation_error(msg)
             return False
 
         if content[-4:] != b'PAR1':
-            self._add_validation_error("Invalid Parquet magic bytes (missing PAR1 footer)")
+            msg = "Invalid Parquet magic bytes (missing PAR1 footer)"
+            self._add_validation_error(msg)
             return False
 
         try:
@@ -130,8 +132,9 @@ class ParquetHandler(BaseHandler):
 
         return buffer.getvalue()
 
-    def serialize_with_schema(self, df: pd.DataFrame,
-                               schema: pa.Schema) -> bytes:
+    def serialize_with_schema(
+        self, df: pd.DataFrame, schema: pa.Schema
+    ) -> bytes:
         """Serialize DataFrame with specific schema.
 
         Args:
@@ -142,7 +145,9 @@ class ParquetHandler(BaseHandler):
             Parquet bytes
         """
         try:
-            table = pa.Table.from_pandas(df, schema=schema, preserve_index=False)
+            table = pa.Table.from_pandas(
+                df, schema=schema, preserve_index=False
+            )
         except (pa.ArrowInvalid, pa.ArrowTypeError):
             table = pa.Table.from_pandas(df, preserve_index=False)
 

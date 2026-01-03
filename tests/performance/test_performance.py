@@ -16,7 +16,7 @@ import pytest
 from src.handlers.csv_handler import CSVHandler
 from src.handlers.json_handler import JSONHandler
 from src.handlers.parquet_handler import ParquetHandler
-from src.pipeline.pipeline_orchestrator import PipelineOrchestrator, create_pipeline
+from src.pipeline.pipeline_orchestrator import create_pipeline
 
 
 @dataclass
@@ -98,7 +98,11 @@ class TestDataGenerator:
 
         while current_size < target_bytes:
             template = cls.PII_TEMPLATES[row_idx % len(cls.PII_TEMPLATES)]
-            row = f"{row_idx},{template['name']},{template['email']},{template['phone']},{template['card']},{template['ssn']},{template['address']},Customer record {row_idx}\n"
+            row = (
+                f"{row_idx},{template['name']},{template['email']},"
+                f"{template['phone']},{template['card']},{template['ssn']},"
+                f"{template['address']},Customer record {row_idx}\n"
+            )
             rows.append(row)
             current_size += len(row)
             row_idx += 1
@@ -154,14 +158,20 @@ class TestDataGenerator:
         """
         rows_needed = max(10, target_size_kb // 2)
 
+        tpl = cls.PII_TEMPLATES
+        n = len(tpl)
+
+        def get_field(field: str) -> list:
+            return [tpl[i % n][field] for i in range(rows_needed)]
+
         data = {
             'id': list(range(rows_needed)),
-            'name': [cls.PII_TEMPLATES[i % len(cls.PII_TEMPLATES)]['name'] for i in range(rows_needed)],
-            'email': [cls.PII_TEMPLATES[i % len(cls.PII_TEMPLATES)]['email'] for i in range(rows_needed)],
-            'phone': [cls.PII_TEMPLATES[i % len(cls.PII_TEMPLATES)]['phone'] for i in range(rows_needed)],
-            'card_number': [cls.PII_TEMPLATES[i % len(cls.PII_TEMPLATES)]['card'] for i in range(rows_needed)],
-            'ssn': [cls.PII_TEMPLATES[i % len(cls.PII_TEMPLATES)]['ssn'] for i in range(rows_needed)],
-            'address': [cls.PII_TEMPLATES[i % len(cls.PII_TEMPLATES)]['address'] for i in range(rows_needed)],
+            'name': get_field('name'),
+            'email': get_field('email'),
+            'phone': get_field('phone'),
+            'card_number': get_field('card'),
+            'ssn': get_field('ssn'),
+            'address': get_field('address'),
             'notes': [f'Customer record {i}' for i in range(rows_needed)]
         }
 
@@ -203,8 +213,14 @@ def run_benchmark(
         min_ms=min(durations),
         max_ms=max(durations),
         p50_ms=statistics.median(durations),
-        p95_ms=sorted(durations)[int(len(durations) * 0.95)] if len(durations) >= 20 else max(durations),
-        p99_ms=sorted(durations)[int(len(durations) * 0.99)] if len(durations) >= 100 else max(durations)
+        p95_ms=(
+            sorted(durations)[int(len(durations) * 0.95)]
+            if len(durations) >= 20 else max(durations)
+        ),
+        p99_ms=(
+            sorted(durations)[int(len(durations) * 0.99)]
+            if len(durations) >= 100 else max(durations)
+        )
     )
 
 
@@ -291,7 +307,9 @@ class TestPipelinePerformance:
         (100, 60000),
         (1000, 180000),  # 3 minutes - PII detection is slow on large files
     ])
-    def test_pipeline_csv_performance(self, pipeline, size_kb, expected_max_ms):
+    def test_pipeline_csv_performance(
+        self, pipeline, size_kb, expected_max_ms
+    ):
         """Test pipeline performance with CSV files."""
         content, rows = TestDataGenerator.generate_csv(size_kb)
 
@@ -301,13 +319,17 @@ class TestPipelinePerformance:
 
         summary = run_benchmark(benchmark, iterations=2, warmup=1)
 
-        throughput = (size_kb / 1024) / (summary.mean_ms / 1000) if summary.mean_ms > 0 else 0
+        if summary.mean_ms > 0:
+            throughput = (size_kb / 1024) / (summary.mean_ms / 1000)
+        else:
+            throughput = 0
 
         print(f"\nPipeline CSV {size_kb}KB ({rows} rows):")
         print(f"  Mean: {summary.mean_ms:.2f}ms")
         print(f"  Throughput: {throughput:.2f} MB/s")
 
-        assert summary.mean_ms < expected_max_ms, f"Pipeline too slow: {summary.mean_ms}ms > {expected_max_ms}ms"
+        msg = f"Pipeline too slow: {summary.mean_ms}ms > {expected_max_ms}ms"
+        assert summary.mean_ms < expected_max_ms, msg
 
     @pytest.mark.performance
     @pytest.mark.slow
@@ -324,7 +346,8 @@ class TestPipelinePerformance:
         print(f"  Success: {result.success}")
 
         if result.detection_summary:
-            print(f"  Entities: {result.detection_summary.get('entities_found', 0)}")
+            entities = result.detection_summary.get('entities_found', 0)
+            print(f"  Entities: {entities}")
 
         assert result.success
 
@@ -395,7 +418,10 @@ class TestProtectionPerformance:
             duration = (time.time() - start) * 1000
 
             ops_per_sec = iterations / (duration / 1000)
-            print(f"  {name}: {duration:.2f}ms for {iterations} ops ({ops_per_sec:.0f} ops/sec)")
+            print(
+                f"  {name}: {duration:.2f}ms for {iterations} ops "
+                f"({ops_per_sec:.0f} ops/sec)"
+            )
 
 
 class TestMemoryUsage:

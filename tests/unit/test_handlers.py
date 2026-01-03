@@ -4,8 +4,6 @@ import io
 import json
 
 import pandas as pd
-import pyarrow as pa
-import pyarrow.parquet as pq
 import pytest
 
 from src.handlers.base_handler import FileMetadata, ProcessedData
@@ -133,7 +131,8 @@ class TestJSONHandler:
 
     def test_parse_array_json(self):
         """Test parsing JSON array."""
-        content = b'[{"name": "John", "age": "30"}, {"name": "Jane", "age": "25"}]'
+        content = b'[{"name": "John", "age": "30"}, '
+        content += b'{"name": "Jane", "age": "25"}]'
         handler = JSONHandler()
         handler.validate(content, 'test.json')
         df = handler.parse(content)

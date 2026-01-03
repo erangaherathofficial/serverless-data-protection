@@ -9,7 +9,11 @@ from typing import Any, Callable, Optional
 
 import pandas as pd
 
-from src.detection.presidio_detector import DetectionResult, PresidioDetector, create_detector
+from src.detection.presidio_detector import (
+    DetectionResult,
+    PresidioDetector,
+    create_detector,
+)
 from src.handlers.base_handler import ProcessedData
 from src.handlers.handler_factory import HandlerFactory, get_handler
 from src.policy.policy_parser import Policy, load_policy
@@ -57,7 +61,9 @@ class PipelineResult:
     detection_summary: Optional[dict] = None
     protection_summary: Optional[dict] = None
     total_duration_ms: float = 0
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    timestamp: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
     error: Optional[str] = None
 
     def add_stage_result(self, result: StageResult) -> None:
@@ -313,7 +319,9 @@ class PipelineOrchestrator:
                 metadata={
                     'entities_found': len(detection_result.entities),
                     'entity_types': detection_result.entity_counts,
-                    'columns_with_pii': list(detection_result.columns_with_pii),
+                    'columns_with_pii': list(
+                        detection_result.columns_with_pii
+                    ),
                     'cells_scanned': detection_result.total_cells_scanned
                 }
             )
@@ -329,7 +337,9 @@ class PipelineOrchestrator:
                 error=str(e)
             )
 
-    def _stage_evaluate(self, detection_result: DetectionResult) -> StageResult:
+    def _stage_evaluate(
+        self, detection_result: DetectionResult
+    ) -> StageResult:
         """Stage 4: Evaluate policy and generate protection plan."""
         start = time.time()
         self._run_hooks(PipelineStage.EVALUATE, 'before', detection_result)
@@ -391,10 +401,13 @@ class PipelineOrchestrator:
                     entity_text = action.entity.text
                     protected_text = strategy.protect(entity_text)
 
-                    new_value = current_value.replace(entity_text, protected_text)
+                    new_value = current_value.replace(
+                        entity_text, protected_text
+                    )
                     protected_df.at[row, col] = new_value
 
-                    protection_counts[method] = protection_counts.get(method, 0) + 1
+                    count = protection_counts.get(method, 0)
+                    protection_counts[method] = count + 1
 
                 except Exception as e:
                     logger.warning(f"Protection failed for {col}[{row}]: {e}")
@@ -428,7 +441,9 @@ class PipelineOrchestrator:
     ) -> StageResult:
         """Stage 6: Validate schema preservation."""
         start = time.time()
-        self._run_hooks(PipelineStage.SCHEMA_CHECK, 'before', original_df, protected_df)
+        self._run_hooks(
+            PipelineStage.SCHEMA_CHECK, 'before', original_df, protected_df
+        )
 
         try:
             validation_result = self._schema_validator.validate(
@@ -444,7 +459,10 @@ class PipelineOrchestrator:
                     'errors': len(validation_result.errors),
                     'warnings': len(validation_result.warnings)
                 },
-                error='; '.join(e.message for e in validation_result.errors) if not validation_result.is_valid else None
+                error=(
+                    '; '.join(e.message for e in validation_result.errors)
+                    if not validation_result.is_valid else None
+                )
             )
 
             self._run_hooks(PipelineStage.SCHEMA_CHECK, 'after', result)

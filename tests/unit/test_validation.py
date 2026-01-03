@@ -36,8 +36,9 @@ class TestSchemaInfo:
         assert schema.columns == ['id', 'name', 'email', 'score']
         assert schema.row_count == 3
         assert 'int64' in schema.dtypes['id']
-        assert schema.nullable['name'] == True  # Use == for numpy bool compatibility
-        assert schema.nullable['email'] == False
+        # Use bool() for numpy bool compatibility
+        assert bool(schema.nullable['name']) is True
+        assert bool(schema.nullable['email']) is False
 
     def test_to_dict(self, sample_df):
         """Test schema serialization."""

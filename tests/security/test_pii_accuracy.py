@@ -4,7 +4,6 @@ Measures precision, recall, and F1-score for PII detection.
 """
 
 from dataclasses import dataclass
-from typing import Optional
 
 import pandas as pd
 import pytest
@@ -26,21 +25,24 @@ class AccuracyMetrics:
         """Calculate precision (TP / (TP + FP))."""
         if self.true_positives + self.false_positives == 0:
             return 0.0
-        return self.true_positives / (self.true_positives + self.false_positives)
+        denom = self.true_positives + self.false_positives
+        return self.true_positives / denom
 
     @property
     def recall(self) -> float:
         """Calculate recall (TP / (TP + FN))."""
         if self.true_positives + self.false_negatives == 0:
             return 0.0
-        return self.true_positives / (self.true_positives + self.false_negatives)
+        denom = self.true_positives + self.false_negatives
+        return self.true_positives / denom
 
     @property
     def f1_score(self) -> float:
         """Calculate F1 score (harmonic mean of precision and recall)."""
         if self.precision + self.recall == 0:
             return 0.0
-        return 2 * (self.precision * self.recall) / (self.precision + self.recall)
+        num = 2 * (self.precision * self.recall)
+        return num / (self.precision + self.recall)
 
 
 @dataclass
@@ -97,9 +99,12 @@ class TestEmailDetectionAccuracy:
             else:
                 metrics.true_negatives += 1
 
-        assert metrics.precision >= 0.8, f"Precision {metrics.precision:.2f} below 0.8"
-        assert metrics.recall >= 0.8, f"Recall {metrics.recall:.2f} below 0.8"
-        assert metrics.f1_score >= 0.8, f"F1 {metrics.f1_score:.2f} below 0.8"
+        prec = metrics.precision
+        assert prec >= 0.8, f"Precision {prec:.2f} below 0.8"
+        recall = metrics.recall
+        assert recall >= 0.8, f"Recall {recall:.2f} below 0.8"
+        f1 = metrics.f1_score
+        assert f1 >= 0.8, f"F1 {f1:.2f} below 0.8"
 
 
 class TestPhoneDetectionAccuracy:
@@ -145,10 +150,11 @@ class TestPhoneDetectionAccuracy:
             else:
                 metrics.true_negatives += 1
 
-        # Phone detection is less reliable in Presidio, especially for UK formats
-        # Lower thresholds to account for format variations
-        assert metrics.precision >= 0.0, f"Precision {metrics.precision:.2f} below threshold"
-        # Just ensure no errors occur - phone detection varies by Presidio version
+        # Phone detection is less reliable in Presidio, especially
+        # for UK formats. Lower thresholds to account for variations
+        prec = metrics.precision
+        assert prec >= 0.0, f"Precision {prec:.2f} below threshold"
+        # Just ensure no errors - phone detection varies by version
         assert isinstance(metrics.recall, float)
 
 
@@ -195,8 +201,10 @@ class TestCreditCardDetectionAccuracy:
             else:
                 metrics.true_negatives += 1
 
-        assert metrics.precision >= 0.8, f"Precision {metrics.precision:.2f} below 0.8"
-        assert metrics.recall >= 0.8, f"Recall {metrics.recall:.2f} below 0.8"
+        prec = metrics.precision
+        assert prec >= 0.8, f"Precision {prec:.2f} below 0.8"
+        recall = metrics.recall
+        assert recall >= 0.8, f"Recall {recall:.2f} below 0.8"
 
 
 class TestDataFrameDetectionAccuracy:
@@ -210,9 +218,13 @@ class TestDataFrameDetectionAccuracy:
     @pytest.fixture
     def labeled_dataframe(self) -> tuple[pd.DataFrame, dict]:
         """Create labeled DataFrame with known PII locations."""
+        names = [
+            'John Smith', 'Jane Doe', 'Bob Wilson',
+            'Alice Brown', 'Charlie Davis'
+        ]
         df = pd.DataFrame({
             'id': ['1', '2', '3', '4', '5'],
-            'name': ['John Smith', 'Jane Doe', 'Bob Wilson', 'Alice Brown', 'Charlie Davis'],
+            'name': names,
             'email': [
                 'john@example.com',
                 'jane@test.org',
@@ -272,8 +284,10 @@ class TestDataFrameDetectionAccuracy:
         for column, m in metrics.items():
             # Email detection should be reliable
             if column == 'email':
-                assert m.precision >= 0.7, f"{column} precision {m.precision:.2f} below 0.7"
-                assert m.recall >= 0.7, f"{column} recall {m.recall:.2f} below 0.7"
+                prec = m.precision
+                assert prec >= 0.7, f"{column} precision {prec:.2f} below 0.7"
+                recall = m.recall
+                assert recall >= 0.7, f"{column} recall {recall:.2f} below 0.7"
             # Phone detection varies by Presidio version and format
             else:
                 assert m.precision >= 0.0, f"{column} precision check"
@@ -348,7 +362,9 @@ class TestDetectionConsistency:
         scores = []
         for _ in range(5):
             entities = detector.detect_text(text)
-            email_entities = [e for e in entities if e.entity_type == 'EMAIL_ADDRESS']
+            email_entities = [
+                e for e in entities if e.entity_type == 'EMAIL_ADDRESS'
+            ]
             if email_entities:
                 scores.append(email_entities[0].score)
 

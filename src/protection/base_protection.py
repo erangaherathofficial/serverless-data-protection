@@ -52,13 +52,13 @@ class BaseProtection(ABC):
     @abstractmethod
     def method_name(self) -> str:
         """Get the protection method name."""
-        pass
+        ...
 
     @property
     @abstractmethod
     def is_reversible(self) -> bool:
         """Whether the protection can be reversed."""
-        pass
+        ...
 
     @abstractmethod
     def protect(self, value: str) -> str:
@@ -70,7 +70,7 @@ class BaseProtection(ABC):
         Returns:
             Protected value
         """
-        pass
+        ...
 
     def protect_with_result(self, value: str) -> ProtectionResult:
         """Apply protection and return detailed result.
@@ -146,7 +146,9 @@ class ProtectionRegistry:
     _strategies: dict[str, type[BaseProtection]] = {}
 
     @classmethod
-    def register(cls, method_name: str, strategy_class: type[BaseProtection]) -> None:
+    def register(
+        cls, method_name: str, strategy_class: type[BaseProtection]
+    ) -> None:
         """Register a protection strategy.
 
         Args:

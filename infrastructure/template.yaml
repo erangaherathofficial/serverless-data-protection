@@ -21,9 +21,8 @@ Parameters:
 
 Globals:
   Function:
-    Runtime: python3.11
     Timeout: 300
-    MemorySize: 1024
+    MemorySize: 3008
     Tracing: Active
     Environment:
       Variables:
@@ -42,8 +41,7 @@ Resources:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref EncryptionKey
+              SSEAlgorithm: AES256
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -52,28 +50,8 @@ Resources:
       VersioningConfiguration:
         Status: Enabled
       NotificationConfiguration:
-        LambdaConfigurations:
-          - Event: 's3:ObjectCreated:*'
-            Function: !GetAtt DataProtectionFunction.Arn
-            Filter:
-              S3Key:
-                Rules:
-                  - Name: suffix
-                    Value: .csv
-          - Event: 's3:ObjectCreated:*'
-            Function: !GetAtt DataProtectionFunction.Arn
-            Filter:
-              S3Key:
-                Rules:
-                  - Name: suffix
-                    Value: .json
-          - Event: 's3:ObjectCreated:*'
-            Function: !GetAtt DataProtectionFunction.Arn
-            Filter:
-              S3Key:
-                Rules:
-                  - Name: suffix
-                    Value: .parquet
+        EventBridgeConfiguration:
+          EventBridgeEnabled: true
 
   SecureDataBucket:
     Type: AWS::S3::Bucket
@@ -82,8 +60,7 @@ Resources:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref EncryptionKey
+              SSEAlgorithm: AES256
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -109,17 +86,6 @@ Resources:
             Principal:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 'kms:*'
-            Resource: '*'
-          - Sid: AllowLambdaAccess
-            Effect: Allow
-            Principal:
-              AWS: !GetAtt LambdaExecutionRole.Arn
-            Action:
-              - 'kms:Encrypt'
-              - 'kms:Decrypt'
-              - 'kms:GenerateDataKey'
-              - 'kms:GenerateDataKeyWithoutPlaintext'
-              - 'kms:DescribeKey'
             Resource: '*'
 
   EncryptionKeyAlias:
@@ -164,8 +130,6 @@ Resources:
         PointInTimeRecoveryEnabled: true
       SSESpecification:
         SSEEnabled: true
-        SSEType: KMS
-        KMSMasterKeyId: !Ref EncryptionKey
       TimeToLiveSpecification:
         AttributeName: ttl
         Enabled: true
@@ -178,36 +142,36 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub 'sdp-data-protection-${Environment}'
-      Handler: src.lambda_handler.handler
-      CodeUri: ../
+      PackageType: Image
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
-          RAW_BUCKET_NAME: !Ref RawDataBucket
-          SECURE_BUCKET_NAME: !Ref SecureDataBucket
-          AUDIT_TABLE_NAME: !Ref AuditTable
+          RAW_BUCKET_NAME: !Sub 'sdp-raw-data-${Environment}-${AWS::AccountId}'
+          SECURE_BUCKET_NAME: !Sub 'sdp-secure-data-${Environment}-${AWS::AccountId}'
+          AUDIT_TABLE_NAME: !Sub 'sdp-audit-${Environment}'
           KMS_KEY_ID: !Ref EncryptionKey
-          AWS_REGION: !Ref AWS::Region
-      Layers:
-        - !Ref DependenciesLayer
-
-  DependenciesLayer:
-    Type: AWS::Serverless::LayerVersion
-    Properties:
-      LayerName: !Sub 'sdp-dependencies-${Environment}'
-      Description: Dependencies for data protection function
-      ContentUri: ../layers/dependencies/
-      CompatibleRuntimes:
-        - python3.11
-
-  LambdaInvokePermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref DataProtectionFunction
-      Action: lambda:InvokeFunction
-      Principal: s3.amazonaws.com
-      SourceAccount: !Ref AWS::AccountId
-      SourceArn: !GetAtt RawDataBucket.Arn
+      Events:
+        S3ObjectCreated:
+          Type: EventBridgeRule
+          Properties:
+            Pattern:
+              source:
+                - aws.s3
+              detail-type:
+                - Object Created
+              detail:
+                bucket:
+                  name:
+                    - !Sub 'sdp-raw-data-${Environment}-${AWS::AccountId}'
+                object:
+                  key:
+                    - suffix: .csv
+                    - suffix: .json
+                    - suffix: .parquet
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: ../
+      DockerTag: latest
 
   # ============================================================================
   # IAM ROLE
@@ -237,13 +201,13 @@ Resources:
                   - 's3:GetObject'
                   - 's3:GetObjectVersion'
                 Resource:
-                  - !Sub '${RawDataBucket.Arn}/*'
+                  - !Sub 'arn:aws:s3:::sdp-raw-data-${Environment}-${AWS::AccountId}/*'
               - Effect: Allow
                 Action:
                   - 's3:PutObject'
                   - 's3:PutObjectAcl'
                 Resource:
-                  - !Sub '${SecureDataBucket.Arn}/*'
+                  - !Sub 'arn:aws:s3:::sdp-secure-data-${Environment}-${AWS::AccountId}/*'
         - PolicyName: DynamoDBAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -255,8 +219,8 @@ Resources:
                   - 'dynamodb:Query'
                   - 'dynamodb:UpdateItem'
                 Resource:
-                  - !GetAtt AuditTable.Arn
-                  - !Sub '${AuditTable.Arn}/index/*'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/sdp-audit-${Environment}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/sdp-audit-${Environment}/index/*'
         - PolicyName: KMSAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -269,7 +233,7 @@ Resources:
                   - 'kms:GenerateDataKeyWithoutPlaintext'
                   - 'kms:DescribeKey'
                 Resource:
-                  - !GetAtt EncryptionKey.Arn
+                  - !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*'
 
   # ============================================================================
   # CLOUDWATCH LOGS

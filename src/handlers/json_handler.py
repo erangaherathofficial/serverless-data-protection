@@ -64,7 +64,11 @@ class JSONHandler(BaseHandler):
 
         text = text.strip()
 
-        if '\n' in text and not text.startswith('[') and not text.startswith('{'):
+        has_newlines = '\n' in text
+        not_array_or_object = (
+            not text.startswith('[') and not text.startswith('{')
+        )
+        if has_newlines and not_array_or_object:
             return self._validate_ndjson(text)
 
         try:
@@ -95,7 +99,8 @@ class JSONHandler(BaseHandler):
             try:
                 obj = json.loads(line)
                 if not isinstance(obj, dict):
-                    self._add_validation_error(f"Line {i} is not a JSON object")
+                    msg = f"Line {i} is not a JSON object"
+                    self._add_validation_error(msg)
                     return False
             except json.JSONDecodeError as e:
                 self._add_validation_error(f"Line {i} invalid JSON: {e}")
@@ -137,7 +142,8 @@ class JSONHandler(BaseHandler):
 
         for key in ['records', 'data', 'items', 'results', 'rows']:
             if key in data and isinstance(data[key], list):
-                if data[key] and all(isinstance(item, dict) for item in data[key]):
+                all_dicts = all(isinstance(item, dict) for item in data[key])
+                if data[key] and all_dicts:
                     self._detected_path = key
                     self._detected_format = 'nested'
                     return True
@@ -204,7 +210,9 @@ class JSONHandler(BaseHandler):
         records = df.to_dict(orient='records')
 
         if self._detected_format == 'ndjson':
-            lines = [json.dumps(record, ensure_ascii=False) for record in records]
+            lines = [
+                json.dumps(record, ensure_ascii=False) for record in records
+            ]
             content = '\n'.join(lines)
         elif self._detected_format == 'nested' and self._detected_path:
             content = json.dumps(

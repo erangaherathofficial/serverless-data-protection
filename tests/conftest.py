@@ -2,8 +2,7 @@
 
 import os
 import sys
-from typing import Generator
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -28,8 +27,11 @@ def aws_credentials():
     os.environ['AWS_SESSION_TOKEN'] = 'testing'
     os.environ['AWS_DEFAULT_REGION'] = 'eu-west-2'
     yield
-    for key in ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY',
-                'AWS_SECURITY_TOKEN', 'AWS_SESSION_TOKEN', 'AWS_DEFAULT_REGION']:
+    keys = [
+        'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY',
+        'AWS_SECURITY_TOKEN', 'AWS_SESSION_TOKEN', 'AWS_DEFAULT_REGION'
+    ]
+    for key in keys:
         os.environ.pop(key, None)
 
 
@@ -52,11 +54,16 @@ def env_vars():
 @pytest.fixture
 def sample_csv_content() -> bytes:
     """Sample CSV content with PII data."""
-    content = """id,name,email,phone,ssn,address
-1,John Smith,john.smith@example.com,+44 7911 123456,AB123456C,"123 Main St, London"
-2,Jane Doe,jane.doe@test.org,020 7946 0958,CD789012E,"456 Oak Ave, Manchester"
-3,Bob Wilson,bob.wilson@company.co.uk,+44 7700 900123,EF345678G,"789 Pine Rd, Birmingham"
-"""
+    rows = [
+        "id,name,email,phone,ssn,address",
+        '1,John Smith,john.smith@example.com,'
+        '+44 7911 123456,AB123456C,"123 Main St, London"',
+        '2,Jane Doe,jane.doe@test.org,'
+        '020 7946 0958,CD789012E,"456 Oak Ave, Manchester"',
+        '3,Bob Wilson,bob.wilson@company.co.uk,'
+        '+44 7700 900123,EF345678G,"789 Pine Rd, Birmingham"',
+    ]
+    content = "\n".join(rows) + "\n"
     return content.encode('utf-8')
 
 
@@ -121,7 +128,8 @@ def mock_lambda_context():
     context = MagicMock()
     context.function_name = 'sdp-data-protection-test'
     context.function_version = '$LATEST'
-    context.invoked_function_arn = 'arn:aws:lambda:eu-west-2:123456789012:function:sdp-data-protection-test'
+    arn = 'arn:aws:lambda:eu-west-2:123456789012:function:'
+    context.invoked_function_arn = arn + 'sdp-data-protection-test'
     context.memory_limit_in_mb = 1024
     context.aws_request_id = 'test-request-id-12345'
     context.log_group_name = '/aws/lambda/sdp-data-protection-test'

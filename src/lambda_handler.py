@@ -9,7 +9,11 @@ from typing import Any, Optional
 from urllib.parse import unquote_plus
 
 from src.aws.client_manager import get_client_manager
-from src.pipeline.pipeline_orchestrator import PipelineOrchestrator, PipelineResult, create_pipeline
+from src.pipeline.pipeline_orchestrator import (
+    PipelineOrchestrator,
+    PipelineResult,
+    create_pipeline,
+)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(os.environ.get('LOG_LEVEL', 'INFO'))
@@ -27,11 +31,46 @@ class ProcessingError(Exception):
 
 
 def get_pipeline() -> PipelineOrchestrator:
-    """Get or create pipeline orchestrator (singleton for Lambda warm starts)."""
+    """Get or create pipeline orchestrator.
+
+    Uses singleton pattern for Lambda warm starts.
+    """
     global _pipeline
     if _pipeline is None:
         _pipeline = create_pipeline()
     return _pipeline
+
+
+def _normalize_event(event: dict) -> list[dict]:
+    """Normalize S3 or EventBridge events to a common record format.
+
+    Handles both direct S3 event notifications and EventBridge events.
+    EventBridge events have a different structure that needs to be converted.
+
+    Args:
+        event: Raw Lambda event (S3 or EventBridge format)
+
+    Returns:
+        List of normalized records in S3 event format
+    """
+    if 'Records' in event:
+        return event['Records']
+
+    if event.get('source') == 'aws.s3' and 'detail' in event:
+        detail = event['detail']
+        bucket_name = detail.get('bucket', {}).get('name', '')
+        object_key = detail.get('object', {}).get('key', '')
+
+        if bucket_name and object_key:
+            return [{
+                's3': {
+                    'bucket': {'name': bucket_name},
+                    'object': {'key': object_key}
+                }
+            }]
+
+    logger.warning(f"Unknown event format: {list(event.keys())}")
+    return []
 
 
 def handler(event: dict, context: Any) -> dict:
@@ -47,7 +86,7 @@ def handler(event: dict, context: Any) -> dict:
     7. Audit trail generated
 
     Args:
-        event: S3 event notification
+        event: S3 event notification or EventBridge event
         context: Lambda context object
 
     Returns:
@@ -62,10 +101,12 @@ def handler(event: dict, context: Any) -> dict:
     errors = []
 
     try:
-        records = event.get('Records', [])
+        records = _normalize_event(event)
         if not records:
             logger.warning("No records found in event")
-            return _build_response(200, "No records to process", results, errors)
+            return _build_response(
+                200, "No records to process", results, errors
+            )
 
         for record in records:
             try:
@@ -79,22 +120,27 @@ def handler(event: dict, context: Any) -> dict:
                     'error': str(e)
                 })
             except Exception as e:
-                logger.error(f"Unexpected error: {e}\n{traceback.format_exc()}")
-                errors.append({
-                    'error': str(e),
-                    'traceback': traceback.format_exc()
-                })
+                tb = traceback.format_exc()
+                logger.error(f"Unexpected error: {e}\n{tb}")
+                errors.append({'error': str(e)})
 
     except Exception as e:
-        logger.error(f"Handler error: {e}\n{traceback.format_exc()}")
-        return _build_response(500, f"Handler error: {str(e)}", results, errors)
+        tb = traceback.format_exc()
+        logger.error(f"Handler error: {e}\n{tb}")
+        msg = f"Handler error: {str(e)}"
+        return _build_response(500, msg, results, errors)
 
-    duration_ms = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
-    logger.info(f"Processing completed in {duration_ms:.2f}ms - "
-                f"Success: {len(results)}, Errors: {len(errors)}")
+    elapsed = datetime.now(timezone.utc) - start_time
+    duration_ms = elapsed.total_seconds() * 1000
+    logger.info(
+        f"Processing completed in {duration_ms:.2f}ms - "
+        f"Success: {len(results)}, Errors: {len(errors)}"
+    )
 
     status_code = 200 if not errors else 207
-    return _build_response(status_code, "Processing completed", results, errors)
+    return _build_response(
+        status_code, "Processing completed", results, errors
+    )
 
 
 def _process_record(record: dict, request_id: str) -> dict:
@@ -144,7 +190,8 @@ def _process_record(record: dict, request_id: str) -> dict:
             bucket, key
         )
 
-    logger.info(f"Pipeline completed in {pipeline_result.total_duration_ms:.2f}ms")
+    duration = pipeline_result.total_duration_ms
+    logger.info(f"Pipeline completed in {duration:.2f}ms")
 
     if pipeline_result.protected_data:
         secure_key = f"protected/{key}"
@@ -157,11 +204,13 @@ def _process_record(record: dict, request_id: str) -> dict:
                 pipeline_result.protected_data,
                 content_type
             )
+            bucket_name = client_manager.secure_bucket
             logger.info(
-                f"Wrote protected file: s3://{client_manager.secure_bucket}/{secure_key}"
+                f"Wrote protected file: s3://{bucket_name}/{secure_key}"
             )
         except Exception as e:
-            raise ProcessingError(f"Failed to write protected file: {e}", bucket, key)
+            msg = f"Failed to write protected file: {e}"
+            raise ProcessingError(msg, bucket, key)
     else:
         secure_key = None
         logger.warning("No protected data generated")
@@ -241,15 +290,30 @@ def _create_audit_record(
         'success': pipeline_result.success,
         'duration_ms': int(pipeline_result.total_duration_ms),
         'timestamp': timestamp,
-        'detection_summary': pipeline_result.detection_summary,
-        'protection_summary': pipeline_result.protection_summary,
+        'detection_summary': _sanitize_for_dynamodb(
+            pipeline_result.detection_summary
+        ),
+        'protection_summary': _sanitize_for_dynamodb(
+            pipeline_result.protection_summary
+        ),
         'stage_durations': {
-            sr.stage.value: sr.duration_ms
+            sr.stage.value: int(sr.duration_ms)
             for sr in pipeline_result.stage_results
         },
         'error': pipeline_result.error,
-        'ttl': int((datetime.now(timezone.utc).timestamp()) + (90 * 24 * 60 * 60))
+        'ttl': int(datetime.now(timezone.utc).timestamp()) + (90 * 86400)
     }
+
+
+def _sanitize_for_dynamodb(obj: Any) -> Any:
+    """Convert floats to ints for DynamoDB compatibility."""
+    if isinstance(obj, float):
+        return int(obj)
+    elif isinstance(obj, dict):
+        return {k: _sanitize_for_dynamodb(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_sanitize_for_dynamodb(item) for item in obj]
+    return obj
 
 
 def _get_file_extension(key: str) -> str:

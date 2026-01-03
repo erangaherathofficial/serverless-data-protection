@@ -3,8 +3,6 @@
 import json
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from src.lambda_handler import (
     ProcessingError,
     _build_response,
@@ -64,7 +62,9 @@ class TestHelperFunctions:
 
     def test_build_response_with_errors(self):
         """Test response with errors."""
-        response = _build_response(207, 'Partial', [{'id': 1}], [{'error': 'fail'}])
+        response = _build_response(
+            207, 'Partial', [{'id': 1}], [{'error': 'fail'}]
+        )
         assert response['statusCode'] == 207
         body = json.loads(response['body'])
         assert body['failed'] == 1
@@ -97,8 +97,9 @@ class TestHandler:
         assert result['statusCode'] == 200
 
     @patch('src.lambda_handler.get_client_manager')
-    def test_handler_unsupported_format(self, mock_cm, env_vars,
-                                         mock_lambda_context, sample_s3_event):
+    def test_handler_unsupported_format(
+        self, mock_cm, env_vars, mock_lambda_context, sample_s3_event
+    ):
         """Test handler rejects unsupported file formats."""
         sample_s3_event['Records'][0]['s3']['object']['key'] = 'data.txt'
         result = handler(sample_s3_event, mock_lambda_context)
@@ -107,9 +108,10 @@ class TestHandler:
         assert body['failed'] == 1
 
     @patch('src.lambda_handler.get_client_manager')
-    def test_handler_processes_csv(self, mock_cm, env_vars,
-                                    mock_lambda_context, sample_s3_event,
-                                    sample_csv_content):
+    def test_handler_processes_csv(
+        self, mock_cm, env_vars, mock_lambda_context,
+        sample_s3_event, sample_csv_content
+    ):
         """Test handler processes CSV file."""
         mock_manager = MagicMock()
         mock_manager.get_object.return_value = sample_csv_content

@@ -38,7 +38,9 @@ class EvaluationResult:
 
     actions: list[ProtectionAction] = field(default_factory=list)
     unmatched_entities: list[PIIEntity] = field(default_factory=list)
-    actions_by_column: dict[str, list[ProtectionAction]] = field(default_factory=dict)
+    actions_by_column: dict[str, list[ProtectionAction]] = field(
+        default_factory=dict
+    )
     statistics: dict = field(default_factory=dict)
 
     def add_action(self, action: ProtectionAction) -> None:
@@ -110,9 +112,9 @@ class RuleEvaluator:
 
         for entity in detection_result.entities:
             if not self._meets_threshold(entity):
-                logger.debug(
-                    f"Entity {entity.entity_type} below threshold: {entity.score}"
-                )
+                msg = f"Entity {entity.entity_type} below threshold: " \
+                      f"{entity.score}"
+                logger.debug(msg)
                 continue
 
             rule = self._get_rule(entity.entity_type)

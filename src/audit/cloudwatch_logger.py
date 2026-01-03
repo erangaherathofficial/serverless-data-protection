@@ -61,7 +61,9 @@ class AuditLogEntry:
     status: str
     duration_ms: float
     details: dict = field(default_factory=dict)
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    timestamp: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
 
     def to_dict(self) -> dict:
         """Convert to dictionary."""
@@ -227,7 +229,8 @@ class CloudWatchLogger:
                 unit=MetricUnit.COUNT
             ))
 
-            for entity_type, count in detection_summary.get('entity_types', {}).items():
+            entity_types = detection_summary.get('entity_types', {})
+            for entity_type, count in entity_types.items():
                 self._record_metric(MetricData(
                     name='EntityTypeCount',
                     value=count,
@@ -415,7 +418,9 @@ class CloudWatchLogger:
             return
 
         try:
-            metric_data = [m.to_cloudwatch_format() for m in self._metrics_buffer]
+            metric_data = [
+                m.to_cloudwatch_format() for m in self._metrics_buffer
+            ]
 
             self.cloudwatch.put_metric_data(
                 Namespace=self.NAMESPACE,
@@ -453,8 +458,10 @@ class CloudWatchLogger:
                     'properties': {
                         'title': 'Processing Duration',
                         'metrics': [
-                            [self.NAMESPACE, 'ProcessingDuration', {'stat': 'Average'}],
-                            [self.NAMESPACE, 'ProcessingDuration', {'stat': 'p99'}]
+                            [self.NAMESPACE, 'ProcessingDuration',
+                             {'stat': 'Average'}],
+                            [self.NAMESPACE, 'ProcessingDuration',
+                             {'stat': 'p99'}]
                         ]
                     }
                 },

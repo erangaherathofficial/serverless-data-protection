@@ -3,7 +3,7 @@
 import logging
 import os
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Optional
 
@@ -139,7 +139,8 @@ class DynamoDBWriter:
             try:
                 from src.aws.client_manager import get_client_manager
                 client_manager = get_client_manager()
-                self._table = client_manager.dynamodb_resource.Table(self._table_name)
+                resource = client_manager.dynamodb_resource
+                self._table = resource.Table(self._table_name)
             except Exception as e:
                 logger.warning(f"Failed to get DynamoDB table: {e}")
         return self._table
@@ -396,10 +397,9 @@ class DynamoDBWriter:
             'by_date': {}
         }
 
-        from datetime import timedelta
-
         for i in range(days):
-            date = (datetime.now(timezone.utc) - timedelta(days=i)).strftime('%Y-%m-%d')
+            current = datetime.now(timezone.utc) - timedelta(days=i)
+            date = current.strftime('%Y-%m-%d')
             records = self.query_by_date(date)
 
             for record in records:
@@ -411,7 +411,8 @@ class DynamoDBWriter:
                         stats['failed'] += 1
 
                     fmt = record.get('file_format', 'UNKNOWN')
-                    stats['by_format'][fmt] = stats['by_format'].get(fmt, 0) + 1
+                    current_count = stats['by_format'].get(fmt, 0)
+                    stats['by_format'][fmt] = current_count + 1
 
                     if date not in stats['by_date']:
                         stats['by_date'][date] = 0
@@ -470,7 +471,9 @@ class DynamoDBWriter:
 
     def _calculate_ttl(self) -> int:
         """Calculate TTL timestamp."""
-        return int(datetime.now(timezone.utc).timestamp()) + (self._ttl_days * 24 * 60 * 60)
+        now = int(datetime.now(timezone.utc).timestamp())
+        ttl_seconds = self._ttl_days * 24 * 60 * 60
+        return now + ttl_seconds
 
 
 _audit_writer: Optional[DynamoDBWriter] = None

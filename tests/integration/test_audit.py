@@ -1,8 +1,8 @@
 """Integration tests for audit trail."""
 
 import json
-from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -11,14 +11,12 @@ from src.audit.cloudwatch_logger import (
     CloudWatchLogger,
     MetricData,
     MetricUnit,
-    get_audit_logger,
 )
 from src.audit.dynamodb_writer import (
     DetectionRecord,
     DynamoDBWriter,
     ProcessingRecord,
     ProtectionRecord,
-    get_audit_writer,
 )
 
 
@@ -413,7 +411,7 @@ class TestAuditIntegration:
     def test_full_audit_flow(self):
         """Test complete audit flow."""
         logger = CloudWatchLogger(enable_metrics=False)
-        writer = DynamoDBWriter(table_name='')
+        DynamoDBWriter(table_name='')
 
         logger.log_processing_start(
             request_id='req-123',

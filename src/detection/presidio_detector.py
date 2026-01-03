@@ -185,7 +185,9 @@ class PresidioDetector:
             for result in results
         ]
 
-    def detect_dataframe(self, df, columns: Optional[list[str]] = None) -> DetectionResult:
+    def detect_dataframe(
+        self, df, columns: Optional[list[str]] = None
+    ) -> DetectionResult:
         """Detect PII entities in DataFrame.
 
         Args:
@@ -213,7 +215,7 @@ class PresidioDetector:
                 if not isinstance(value, str) or not value.strip():
                     continue
 
-                entities = self.detect_text(str(value))
+                entities = self.detect_text(value)
 
                 if entities:
                     result.cells_with_pii += 1

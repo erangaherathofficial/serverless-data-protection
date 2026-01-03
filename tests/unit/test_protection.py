@@ -6,13 +6,8 @@ from src.policy.policy_parser import ProtectionOptions
 from src.protection.aes256_encryption import (
     AES256Encryption,
     DecryptionError,
-    EncryptionError,
 )
-from src.protection.base_protection import (
-    BaseProtection,
-    ProtectionRegistry,
-    ProtectionResult,
-)
+from src.protection.base_protection import ProtectionRegistry
 from src.protection.masking import (
     CreditCardMasking,
     EmailMasking,
@@ -20,7 +15,7 @@ from src.protection.masking import (
     PhoneMasking,
     Redaction,
 )
-from src.protection.sha256_hashing import SHA256Hashing, SHA512Hashing
+from src.protection.sha256_hashing import SHA256Hashing
 from src.protection.tokenization import (
     FormatPreservingTokenization,
     Tokenization,

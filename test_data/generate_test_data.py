@@ -1,13 +1,12 @@
 """Generate synthetic test data for performance and integration testing.
 
-Creates test files with varying sizes and PII patterns across CSV, JSON, and Parquet formats.
+Creates test files with varying sizes and PII patterns across CSV, JSON,
+and Parquet formats.
 """
 
 import io
 import json
-import os
 import random
-import string
 from pathlib import Path
 from typing import Any
 
@@ -76,7 +75,8 @@ class SyntheticDataGenerator:
 
     def _generate_nino(self) -> str:
         """Generate UK National Insurance Number."""
-        prefix = random.choice(['AB', 'CD', 'EF', 'GH', 'JK', 'LM', 'NP', 'RS'])
+        prefixes = ['AB', 'CD', 'EF', 'GH', 'JK', 'LM', 'NP', 'RS']
+        prefix = random.choice(prefixes)
         numbers = ''.join([str(random.randint(0, 9)) for _ in range(6)])
         suffix = random.choice(['A', 'B', 'C', 'D'])
         return f"{prefix}{numbers}{suffix}"
@@ -96,11 +96,13 @@ class SyntheticDataGenerator:
         """Generate UK address."""
         number = random.randint(1, 200)
         street_types = ['Street', 'Road', 'Avenue', 'Lane', 'Close', 'Way']
-        street_names = ['High', 'Church', 'Victoria', 'Station', 'Park', 'Mill']
+        street_names = ['High', 'Church', 'Victoria', 'Station', 'Park']
         city = random.choice(self.UK_CITIES)
         postcode = random.choice(self.UK_POSTCODES)
+        street = random.choice(street_names)
+        st_type = random.choice(street_types)
         # Avoid commas to prevent CSV parsing issues
-        return f"{number} {random.choice(street_names)} {random.choice(street_types)} {city} {postcode}"
+        return f"{number} {street} {st_type} {city} {postcode}"
 
     def _generate_dob(self) -> str:
         """Generate date of birth."""
@@ -109,7 +111,9 @@ class SyntheticDataGenerator:
         day = random.randint(1, 28)
         return f"{year:04d}-{month:02d}-{day:02d}"
 
-    def generate_record(self, include_sensitive: bool = True) -> dict[str, Any]:
+    def generate_record(
+        self, include_sensitive: bool = True
+    ) -> dict[str, Any]:
         """Generate single record with PII data."""
         name = random.choice(self.UK_NAMES)
 
@@ -133,13 +137,19 @@ class SyntheticDataGenerator:
 
         return record
 
-    def generate_csv_data(self, rows: int, include_sensitive: bool = True) -> bytes:
+    def generate_csv_data(
+        self, rows: int, include_sensitive: bool = True
+    ) -> bytes:
         """Generate CSV data with specified number of rows."""
-        records = [self.generate_record(include_sensitive) for _ in range(rows)]
+        records = [
+            self.generate_record(include_sensitive) for _ in range(rows)
+        ]
         df = pd.DataFrame(records)
         return df.to_csv(index=False).encode('utf-8')
 
-    def generate_json_data(self, records_count: int, nested: bool = False) -> bytes:
+    def generate_json_data(
+        self, records_count: int, nested: bool = False
+    ) -> bytes:
         """Generate JSON data with specified number of records."""
         records = [self.generate_record() for _ in range(records_count)]
 
@@ -211,13 +221,15 @@ class SyntheticDataGenerator:
         for name, records in json_sizes:
             # Standard JSON
             data = self.generate_json_data(records)
-            (json_dir / f'{name}_{records}_records.json').write_bytes(data)
-            print(f"Created JSON: {name}_{records}_records.json ({len(data)} bytes)")
+            fname = f'{name}_{records}_records.json'
+            (json_dir / fname).write_bytes(data)
+            print(f"Created JSON: {fname} ({len(data)} bytes)")
 
             # Nested JSON
             data = self.generate_json_data(records, nested=True)
-            (json_dir / f'{name}_{records}_nested.json').write_bytes(data)
-            print(f"Created JSON: {name}_{records}_nested.json ({len(data)} bytes)")
+            fname = f'{name}_{records}_nested.json'
+            (json_dir / fname).write_bytes(data)
+            print(f"Created JSON: {fname} ({len(data)} bytes)")
 
         # NDJSON
         data = self.generate_ndjson_data(500)
@@ -233,11 +245,12 @@ class SyntheticDataGenerator:
 
         for name, rows in parquet_sizes:
             data = self.generate_parquet_data(rows)
+            fname = f'{name}_{rows}_rows.parquet'
             if data:
-                (parquet_dir / f'{name}_{rows}_rows.parquet').write_bytes(data)
-                print(f"Created Parquet: {name}_{rows}_rows.parquet ({len(data)} bytes)")
+                (parquet_dir / fname).write_bytes(data)
+                print(f"Created Parquet: {fname} ({len(data)} bytes)")
             else:
-                print(f"Skipped Parquet: {name}_{rows}_rows.parquet (pyarrow not available)")
+                print(f"Skipped Parquet: {fname} (pyarrow unavailable)")
 
         print("\nTest data generation complete!")
 

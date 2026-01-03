@@ -63,7 +63,8 @@ class CSVHandler(BaseHandler):
             return False
 
         try:
-            reader = csv.reader(io.StringIO(text), delimiter=self._detected_delimiter)
+            text_io = io.StringIO(text)
+            reader = csv.reader(text_io, delimiter=self._detected_delimiter)
             rows = list(reader)
 
             if len(rows) < 1:
@@ -77,9 +78,9 @@ class CSVHandler(BaseHandler):
 
             for i, row in enumerate(rows[1:], start=2):
                 if len(row) != header_count:
-                    self._add_validation_error(
-                        f"Row {i} has {len(row)} columns, expected {header_count}"
-                    )
+                    msg = f"Row {i} has {len(row)} columns, " \
+                          f"expected {header_count}"
+                    self._add_validation_error(msg)
                     return False
 
         except csv.Error as e:

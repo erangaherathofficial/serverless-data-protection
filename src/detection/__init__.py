@@ -10,7 +10,6 @@ from src.detection.custom_recognizers import (
     UKPostcodeRecognizer,
     VehicleRegistrationRecognizer,
     get_custom_recognizers,
-    get_uk_recognizers,
 )
 from src.detection.presidio_detector import (
     DetectionResult,
@@ -33,5 +32,4 @@ __all__ = [
     'BankAccountRecognizer',
     'VehicleRegistrationRecognizer',
     'get_custom_recognizers',
-    'get_uk_recognizers',
 ]

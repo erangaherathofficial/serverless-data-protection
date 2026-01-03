@@ -52,8 +52,9 @@ class HandlerFactory:
         return handler_class(**kwargs)
 
     @classmethod
-    def get_handler_for_extension(cls, extension: str,
-                                   **kwargs) -> BaseHandler:
+    def get_handler_for_extension(
+        cls, extension: str, **kwargs
+    ) -> BaseHandler:
         """Get handler for specific extension.
 
         Args:

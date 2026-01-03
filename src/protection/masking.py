@@ -25,7 +25,6 @@ class Masking(BaseProtection):
         self._mask_char = self._options.mask_char
         self._visible_chars = self._options.visible_chars
         self._direction = self._options.direction
-        self._preserve_length = self._options.preserve_length
 
     @property
     def method_name(self) -> str:
@@ -85,9 +84,9 @@ class Masking(BaseProtection):
         end_mask = length - self._visible_chars - start_mask
 
         return (
-            self._mask_char * start_mask +
-            value[start_mask:start_mask + self._visible_chars] +
-            self._mask_char * end_mask
+            self._mask_char * start_mask
+            + value[start_mask:start_mask + self._visible_chars]
+            + self._mask_char * end_mask
         )
 
     def _get_metadata(self, original: str, protected: str) -> dict:
@@ -180,9 +179,9 @@ class EmailMasking(Masking):
             masked_local = self._mask_char * len(local_part)
         else:
             masked_local = (
-                local_part[0] +
-                self._mask_char * (len(local_part) - 2) +
-                local_part[-1]
+                local_part[0]
+                + self._mask_char * (len(local_part) - 2)
+                + local_part[-1]
             )
 
         return f"{masked_local}@{domain}"
@@ -266,6 +265,6 @@ class CreditCardMasking(Masking):
         parts = []
 
         for i in range(0, len(masked), 4):
-            parts.append(masked[i:i+4])
+            parts.append(masked[i:i + 4])
 
         return separator.join(parts)

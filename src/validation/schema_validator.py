@@ -126,12 +126,18 @@ class ValidationResult:
     @property
     def errors(self) -> list[ValidationIssue]:
         """Get error issues only."""
-        return [i for i in self.issues if i.severity == ValidationSeverity.ERROR]
+        return [
+            i for i in self.issues
+            if i.severity == ValidationSeverity.ERROR
+        ]
 
     @property
     def warnings(self) -> list[ValidationIssue]:
         """Get warning issues only."""
-        return [i for i in self.issues if i.severity == ValidationSeverity.WARNING]
+        return [
+            i for i in self.issues
+            if i.severity == ValidationSeverity.WARNING
+        ]
 
     def to_dict(self) -> dict:
         """Convert to dictionary."""
@@ -140,8 +146,14 @@ class ValidationResult:
             'error_count': len(self.errors),
             'warning_count': len(self.warnings),
             'issues': [i.to_dict() for i in self.issues],
-            'original_schema': self.original_schema.to_dict() if self.original_schema else None,
-            'protected_schema': self.protected_schema.to_dict() if self.protected_schema else None
+            'original_schema': (
+                self.original_schema.to_dict()
+                if self.original_schema else None
+            ),
+            'protected_schema': (
+                self.protected_schema.to_dict()
+                if self.protected_schema else None
+            )
         }
 
 
@@ -166,7 +178,7 @@ class SchemaValidator:
 
         Args:
             strict_types: Require exact type matches
-            allow_type_widening: Allow string conversion (common after protection)
+            allow_type_widening: Allow string conversion (post-protection)
             validate_row_count: Check row counts match
         """
         self._strict_types = strict_types
@@ -242,8 +254,12 @@ class SchemaValidator:
     ) -> None:
         """Validate column order is preserved."""
         if original.columns != protected.columns:
-            common_cols = [c for c in original.columns if c in protected.columns]
-            protected_order = [c for c in protected.columns if c in original.columns]
+            common_cols = [
+                c for c in original.columns if c in protected.columns
+            ]
+            protected_order = [
+                c for c in protected.columns if c in original.columns
+            ]
 
             if common_cols != protected_order:
                 result.add_warning(
@@ -282,8 +298,10 @@ class SchemaValidator:
                 )
             elif self._allow_type_widening:
                 if self._is_valid_type_conversion(orig_dtype, prot_dtype):
+                    msg = f"Type widened for '{col}': " \
+                          f"{orig_dtype} -> {prot_dtype}"
                     result.add_info(
-                        f"Type widened for '{col}': {orig_dtype} -> {prot_dtype}",
+                        msg,
                         column=col,
                         details={
                             'original_type': orig_dtype,
@@ -291,8 +309,10 @@ class SchemaValidator:
                         }
                     )
                 else:
+                    msg = f"Unexpected type change for '{col}': " \
+                          f"{orig_dtype} -> {prot_dtype}"
                     result.add_warning(
-                        f"Unexpected type change for '{col}': {orig_dtype} -> {prot_dtype}",
+                        msg,
                         column=col,
                         details={
                             'original_type': orig_dtype,
@@ -308,8 +328,10 @@ class SchemaValidator:
     ) -> None:
         """Validate row count matches."""
         if original.row_count != protected.row_count:
+            msg = f"Row count mismatch: {original.row_count} " \
+                  f"-> {protected.row_count}"
             result.add_error(
-                f"Row count mismatch: {original.row_count} -> {protected.row_count}",
+                msg,
                 details={
                     'original_rows': original.row_count,
                     'protected_rows': protected.row_count

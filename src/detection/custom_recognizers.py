@@ -330,21 +330,3 @@ def get_custom_recognizers() -> list:
         BankAccountRecognizer(),
         VehicleRegistrationRecognizer(),
     ]
-
-
-def get_uk_recognizers() -> list:
-    """Get UK-specific recognizers only.
-
-    Returns:
-        List of UK-focused recognizer instances
-    """
-    return [
-        UKNHSRecognizer(),
-        UKNINORecognizer(),
-        UKPostcodeRecognizer(),
-        UKPhoneRecognizer(),
-        DriversLicenseRecognizer(),
-        PassportRecognizer(),
-        BankAccountRecognizer(),
-        VehicleRegistrationRecognizer(),
-    ]

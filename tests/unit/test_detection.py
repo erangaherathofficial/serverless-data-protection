@@ -103,7 +103,9 @@ class TestPresidioDetector:
         text = "Contact me at john.smith@example.com for more info."
         entities = detector.detect_text(text)
 
-        email_entities = [e for e in entities if e.entity_type == 'EMAIL_ADDRESS']
+        email_entities = [
+            e for e in entities if e.entity_type == 'EMAIL_ADDRESS'
+        ]
         assert len(email_entities) >= 1
         assert 'john.smith@example.com' in email_entities[0].text
 
@@ -113,9 +115,9 @@ class TestPresidioDetector:
         text = "Call me at 555-123-4567 or +1-555-987-6543 tomorrow."
         entities = detector.detect_text(text)
 
-        # Check for any phone-related entities (may vary by Presidio version)
-        phone_entities = [e for e in entities if 'PHONE' in e.entity_type.upper()]
-        # Presidio phone detection can be version-dependent, so we just verify no errors
+        # Check for any phone-related entities (varies by Presidio version)
+        # Presidio phone detection can be version-dependent
+        # Just verify no errors occur
         assert isinstance(entities, list)
 
     def test_detect_credit_card(self, detector):

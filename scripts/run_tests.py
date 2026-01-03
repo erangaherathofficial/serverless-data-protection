@@ -93,7 +93,8 @@ def run_coverage(verbose: bool = False) -> int:
     result = run_command(cmd, 'Tests with Coverage')
 
     if result == 0:
-        print(f"\nCoverage report generated at: {PROJECT_ROOT / 'coverage_html' / 'index.html'}")
+        report_path = PROJECT_ROOT / 'coverage_html' / 'index.html'
+        print(f"\nCoverage report generated at: {report_path}")
 
     return result
 
@@ -131,13 +132,16 @@ Examples:
     python scripts/run_tests.py integration -v
     python scripts/run_tests.py coverage
     python scripts/run_tests.py test tests/unit/test_handlers.py
-    python scripts/run_tests.py test tests/unit/test_handlers.py::TestCSVHandler::test_parse_simple_csv
         """
     )
 
+    choices = [
+        'unit', 'integration', 'security', 'performance',
+        'all', 'coverage', 'quick', 'generate', 'test'
+    ]
     parser.add_argument(
         'command',
-        choices=['unit', 'integration', 'security', 'performance', 'all', 'coverage', 'quick', 'generate', 'test'],
+        choices=choices,
         help='Test suite to run'
     )
 

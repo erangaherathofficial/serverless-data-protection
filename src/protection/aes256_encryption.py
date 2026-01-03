@@ -6,7 +6,6 @@ import os
 import secrets
 from typing import Optional
 
-from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 from src.policy.policy_parser import ProtectionOptions
@@ -21,12 +20,10 @@ IV_SIZE = 16
 
 class EncryptionError(Exception):
     """Raised when encryption fails."""
-    pass
 
 
 class DecryptionError(Exception):
     """Raised when decryption fails."""
-    pass
 
 
 @register_protection('aes256_encrypt')
@@ -91,8 +88,7 @@ class AES256Encryption(BaseProtection):
 
             cipher = Cipher(
                 algorithms.AES(self._key),
-                modes.CBC(iv),
-                backend=default_backend()
+                modes.CBC(iv)
             )
             encryptor = cipher.encryptor()
             ciphertext = encryptor.update(plaintext) + encryptor.finalize()
@@ -133,8 +129,7 @@ class AES256Encryption(BaseProtection):
 
             cipher = Cipher(
                 algorithms.AES(self._key),
-                modes.CBC(iv),
-                backend=default_backend()
+                modes.CBC(iv)
             )
             decryptor = cipher.decryptor()
             padded = decryptor.update(ciphertext) + decryptor.finalize()
@@ -142,8 +137,6 @@ class AES256Encryption(BaseProtection):
             plaintext = self._unpad(padded)
             return plaintext.decode('utf-8')
 
-        except DecryptionError:
-            raise
         except Exception as e:
             logger.error(f"Decryption failed: {e}")
             raise DecryptionError(f"Failed to decrypt value: {e}")

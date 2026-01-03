@@ -33,7 +33,7 @@ class SHA256Hashing(BaseProtection):
             salt: Optional salt prefix for hashing
             use_hmac: Whether to use HMAC-SHA256
             hmac_key: Secret key for HMAC (generated if None and use_hmac=True)
-            truncate_length: Truncate hash to this many characters (None = full hash)
+            truncate_length: Truncate hash to N chars (None = full)
         """
         super().__init__(options)
         self._salt = salt or os.environ.get('HASH_SALT', '')

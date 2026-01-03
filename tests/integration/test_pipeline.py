@@ -9,7 +9,6 @@ import pytest
 from src.handlers.handler_factory import get_handler
 from src.pipeline.pipeline_orchestrator import (
     PipelineOrchestrator,
-    PipelineResult,
     PipelineStage,
     create_pipeline,
 )
@@ -22,12 +21,16 @@ class TestPipelineIntegration:
     @pytest.fixture
     def sample_csv_with_pii(self) -> bytes:
         """Create CSV with various PII types."""
-        content = """id,name,email,phone,card_number,notes
-1,John Smith,john.smith@example.com,+44 7911 123456,4111111111111111,Regular customer
-2,Jane Doe,jane.doe@company.co.uk,020 7946 0958,5500000000000004,VIP member
-3,Bob Wilson,bob@test.org,07700 900123,340000000000009,New signup
-"""
-        return content.encode('utf-8')
+        rows = [
+            "id,name,email,phone,card_number,notes",
+            "1,John Smith,john.smith@example.com,"
+            "+44 7911 123456,4111111111111111,Regular customer",
+            "2,Jane Doe,jane.doe@company.co.uk,"
+            "020 7946 0958,5500000000000004,VIP member",
+            "3,Bob Wilson,bob@test.org,"
+            "07700 900123,340000000000009,New signup",
+        ]
+        return ("\n".join(rows) + "\n").encode('utf-8')
 
     @pytest.fixture
     def sample_json_with_pii(self) -> bytes:
@@ -110,7 +113,8 @@ class TestPipelineIntegration:
         assert result.protected_data is not None
 
         for stage_result in result.stage_results:
-            assert stage_result.success is True, f"Stage {stage_result.stage} failed"
+            msg = f"Stage {stage_result.stage} failed"
+            assert stage_result.success is True, msg
 
         assert result.detection_summary is not None
         assert len(result.detection_summary.get('entities', [])) > 0
@@ -224,7 +228,9 @@ class TestPipelineIntegration:
         assert result.success is False
 
     @pytest.mark.integration
-    def test_pipeline_result_serialization(self, pipeline, sample_csv_with_pii):
+    def test_pipeline_result_serialization(
+        self, pipeline, sample_csv_with_pii
+    ):
         """Test pipeline result can be serialized."""
         result = pipeline.process(sample_csv_with_pii, 'test.csv')
 
@@ -338,8 +344,12 @@ class TestPipelineWithDifferentPolicies:
             rules=[]
         )
 
-        low_pipeline = PipelineOrchestrator(policy=policy, detector=low_detector)
-        high_pipeline = PipelineOrchestrator(policy=policy, detector=high_detector)
+        low_pipeline = PipelineOrchestrator(
+            policy=policy, detector=low_detector
+        )
+        high_pipeline = PipelineOrchestrator(
+            policy=policy, detector=high_detector
+        )
 
         low_result = low_pipeline.process(csv_content, 'test.csv')
         high_result = high_pipeline.process(csv_content, 'test.csv')
