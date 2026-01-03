@@ -5,7 +5,6 @@ import json
 
 import pandas as pd
 import pytest
-
 from src.handlers.handler_factory import get_handler
 from src.pipeline.pipeline_orchestrator import (
     PipelineOrchestrator,
@@ -229,7 +228,7 @@ class TestPipelineIntegration:
 
     @pytest.mark.integration
     def test_pipeline_result_serialization(
-        self, pipeline, sample_csv_with_pii
+            self, pipeline, sample_csv_with_pii
     ):
         """Test pipeline result can be serialized."""
         result = pipeline.process(sample_csv_with_pii, 'test.csv')

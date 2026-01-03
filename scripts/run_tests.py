@@ -23,7 +23,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 # Project root directory
 PROJECT_ROOT = Path(__file__).parent.parent
 TESTS_DIR = PROJECT_ROOT / 'tests'

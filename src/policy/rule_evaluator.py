@@ -130,17 +130,17 @@ class RuleEvaluator:
                 result.add_action(action)
 
                 method_counts[rule.protection_method] = (
-                    method_counts.get(rule.protection_method, 0) + 1
+                        method_counts.get(rule.protection_method, 0) + 1
                 )
                 entity_type_counts[entity.entity_type] = (
-                    entity_type_counts.get(entity.entity_type, 0) + 1
+                        entity_type_counts.get(entity.entity_type, 0) + 1
                 )
             else:
                 if self._policy.settings.default_protection != 'none':
                     action = self._create_default_action(entity)
                     result.add_action(action)
                     method_counts[action.protection_method] = (
-                        method_counts.get(action.protection_method, 0) + 1
+                            method_counts.get(action.protection_method, 0) + 1
                     )
                 else:
                     result.add_unmatched(entity)

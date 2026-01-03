@@ -7,7 +7,6 @@ from dataclasses import dataclass
 
 import pandas as pd
 import pytest
-
 from src.detection.presidio_detector import PresidioDetector
 
 

@@ -96,10 +96,10 @@ class CloudWatchLogger:
     NAMESPACE = 'ServerlessDataProtection'
 
     def __init__(
-        self,
-        environment: Optional[str] = None,
-        enable_metrics: bool = True,
-        log_level: int = logging.INFO
+            self,
+            environment: Optional[str] = None,
+            enable_metrics: bool = True,
+            log_level: int = logging.INFO
     ) -> None:
         """Initialize CloudWatch logger.
 
@@ -133,11 +133,11 @@ class CloudWatchLogger:
         return self._cloudwatch_client
 
     def log_processing_start(
-        self,
-        request_id: str,
-        file_name: str,
-        file_size: int,
-        file_format: str
+            self,
+            request_id: str,
+            file_name: str,
+            file_size: int,
+            file_format: str
     ) -> None:
         """Log start of file processing.
 
@@ -176,13 +176,13 @@ class CloudWatchLogger:
         ))
 
     def log_processing_complete(
-        self,
-        request_id: str,
-        file_name: str,
-        duration_ms: float,
-        success: bool,
-        detection_summary: Optional[dict] = None,
-        protection_summary: Optional[dict] = None
+            self,
+            request_id: str,
+            file_name: str,
+            duration_ms: float,
+            success: bool,
+            detection_summary: Optional[dict] = None,
+            protection_summary: Optional[dict] = None
     ) -> None:
         """Log completion of file processing.
 
@@ -247,13 +247,13 @@ class CloudWatchLogger:
             ))
 
     def log_detection_results(
-        self,
-        request_id: str,
-        file_name: str,
-        entities_found: int,
-        entity_types: dict[str, int],
-        columns_with_pii: list[str],
-        duration_ms: float
+            self,
+            request_id: str,
+            file_name: str,
+            entities_found: int,
+            entity_types: dict[str, int],
+            columns_with_pii: list[str],
+            duration_ms: float
     ) -> None:
         """Log PII detection results.
 
@@ -281,13 +281,13 @@ class CloudWatchLogger:
         self._logger.info(entry.to_json())
 
     def log_protection_applied(
-        self,
-        request_id: str,
-        file_name: str,
-        protection_method: str,
-        entity_type: str,
-        column: str,
-        count: int
+            self,
+            request_id: str,
+            file_name: str,
+            protection_method: str,
+            entity_type: str,
+            column: str,
+            count: int
     ) -> None:
         """Log protection application.
 
@@ -323,12 +323,12 @@ class CloudWatchLogger:
         ))
 
     def log_error(
-        self,
-        request_id: str,
-        file_name: str,
-        error_type: str,
-        error_message: str,
-        stage: Optional[str] = None
+            self,
+            request_id: str,
+            file_name: str,
+            error_type: str,
+            error_message: str,
+            stage: Optional[str] = None
     ) -> None:
         """Log processing error.
 
@@ -362,12 +362,12 @@ class CloudWatchLogger:
         ))
 
     def log_schema_validation(
-        self,
-        request_id: str,
-        file_name: str,
-        is_valid: bool,
-        errors: int,
-        warnings: int
+            self,
+            request_id: str,
+            file_name: str,
+            is_valid: bool,
+            errors: int,
+            warnings: int
     ) -> None:
         """Log schema validation results.
 

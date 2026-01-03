@@ -4,7 +4,6 @@ import json
 from typing import Any, Optional
 
 import pandas as pd
-
 from src.handlers.base_handler import BaseHandler
 
 
@@ -66,7 +65,7 @@ class JSONHandler(BaseHandler):
 
         has_newlines = '\n' in text
         not_array_or_object = (
-            not text.startswith('[') and not text.startswith('{')
+                not text.startswith('[') and not text.startswith('{')
         )
         if has_newlines and not_array_or_object:
             return self._validate_ndjson(text)

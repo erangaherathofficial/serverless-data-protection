@@ -49,7 +49,7 @@ class DetectionResult:
         """Add detected entity and update counts."""
         self.entities.append(entity)
         self.entity_counts[entity.entity_type] = (
-            self.entity_counts.get(entity.entity_type, 0) + 1
+                self.entity_counts.get(entity.entity_type, 0) + 1
         )
         if entity.column_name:
             self.columns_with_pii.add(entity.column_name)
@@ -94,10 +94,10 @@ class PresidioDetector:
     ]
 
     def __init__(
-        self,
-        entities: Optional[list[str]] = None,
-        score_threshold: float = 0.7,
-        language: str = 'en'
+            self,
+            entities: Optional[list[str]] = None,
+            score_threshold: float = 0.7,
+            language: str = 'en'
     ) -> None:
         """Initialize Presidio detector.
 
@@ -186,7 +186,7 @@ class PresidioDetector:
         ]
 
     def detect_dataframe(
-        self, df, columns: Optional[list[str]] = None
+            self, df, columns: Optional[list[str]] = None
     ) -> DetectionResult:
         """Detect PII entities in DataFrame.
 
@@ -269,7 +269,7 @@ class PresidioDetector:
                 if entity.column_name not in summary:
                     summary[entity.column_name] = {}
                 summary[entity.column_name][entity.entity_type] = (
-                    summary[entity.column_name].get(entity.entity_type, 0) + 1
+                        summary[entity.column_name].get(entity.entity_type, 0) + 1
                 )
 
         return summary
@@ -296,9 +296,9 @@ class PresidioDetector:
 
 
 def create_detector(
-    entities: Optional[list[str]] = None,
-    score_threshold: float = 0.7,
-    include_custom: bool = True
+        entities: Optional[list[str]] = None,
+        score_threshold: float = 0.7,
+        include_custom: bool = True
 ) -> PresidioDetector:
     """Create configured Presidio detector.
 

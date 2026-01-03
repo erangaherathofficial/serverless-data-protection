@@ -169,10 +169,10 @@ class SchemaValidator:
     """
 
     def __init__(
-        self,
-        strict_types: bool = False,
-        allow_type_widening: bool = True,
-        validate_row_count: bool = True
+            self,
+            strict_types: bool = False,
+            allow_type_widening: bool = True,
+            validate_row_count: bool = True
     ) -> None:
         """Initialize validator.
 
@@ -186,9 +186,9 @@ class SchemaValidator:
         self._validate_row_count = validate_row_count
 
     def validate(
-        self,
-        original: pd.DataFrame,
-        protected: pd.DataFrame
+            self,
+            original: pd.DataFrame,
+            protected: pd.DataFrame
     ) -> ValidationResult:
         """Validate protected DataFrame against original schema.
 
@@ -220,10 +220,10 @@ class SchemaValidator:
         return result
 
     def _validate_columns(
-        self,
-        original: SchemaInfo,
-        protected: SchemaInfo,
-        result: ValidationResult
+            self,
+            original: SchemaInfo,
+            protected: SchemaInfo,
+            result: ValidationResult
     ) -> None:
         """Validate column names match."""
         original_cols = set(original.columns)
@@ -247,10 +247,10 @@ class SchemaValidator:
             )
 
     def _validate_column_order(
-        self,
-        original: SchemaInfo,
-        protected: SchemaInfo,
-        result: ValidationResult
+            self,
+            original: SchemaInfo,
+            protected: SchemaInfo,
+            result: ValidationResult
     ) -> None:
         """Validate column order is preserved."""
         if original.columns != protected.columns:
@@ -271,10 +271,10 @@ class SchemaValidator:
                 )
 
     def _validate_dtypes(
-        self,
-        original: SchemaInfo,
-        protected: SchemaInfo,
-        result: ValidationResult
+            self,
+            original: SchemaInfo,
+            protected: SchemaInfo,
+            result: ValidationResult
     ) -> None:
         """Validate data types are compatible."""
         for col in original.columns:
@@ -321,10 +321,10 @@ class SchemaValidator:
                     )
 
     def _validate_rows(
-        self,
-        original: SchemaInfo,
-        protected: SchemaInfo,
-        result: ValidationResult
+            self,
+            original: SchemaInfo,
+            protected: SchemaInfo,
+            result: ValidationResult
     ) -> None:
         """Validate row count matches."""
         if original.row_count != protected.row_count:
@@ -339,10 +339,10 @@ class SchemaValidator:
             )
 
     def _validate_nullable(
-        self,
-        original: pd.DataFrame,
-        protected: pd.DataFrame,
-        result: ValidationResult
+            self,
+            original: pd.DataFrame,
+            protected: pd.DataFrame,
+            result: ValidationResult
     ) -> None:
         """Validate nullable constraints."""
         for col in original.columns:
@@ -430,8 +430,8 @@ class SchemaComparator:
 
     @staticmethod
     def compare(
-        schema1: SchemaInfo,
-        schema2: SchemaInfo
+            schema1: SchemaInfo,
+            schema2: SchemaInfo
     ) -> dict:
         """Compare two schemas and return differences.
 
@@ -476,9 +476,9 @@ class SchemaComparator:
 
     @staticmethod
     def are_compatible(
-        schema1: SchemaInfo,
-        schema2: SchemaInfo,
-        strict: bool = False
+            schema1: SchemaInfo,
+            schema2: SchemaInfo,
+            strict: bool = False
     ) -> bool:
         """Check if two schemas are compatible.
 
@@ -503,9 +503,9 @@ class SchemaComparator:
 
 
 def validate_schema(
-    original: pd.DataFrame,
-    protected: pd.DataFrame,
-    strict: bool = False
+        original: pd.DataFrame,
+        protected: pd.DataFrame,
+        strict: bool = False
 ) -> ValidationResult:
     """Convenience function to validate schema preservation.
 

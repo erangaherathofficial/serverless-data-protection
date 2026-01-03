@@ -115,7 +115,7 @@ class Policy:
     metadata: dict = field(default_factory=dict)
 
     def get_rule_for_entity(
-        self, entity_type: str
+            self, entity_type: str
     ) -> Optional[ProtectionRule]:
         """Get highest priority rule for entity type."""
         matching = [r for r in self.rules if r.entity_type == entity_type]
@@ -331,7 +331,7 @@ class PolicyParser:
 
             if 'priority' in rule:
                 is_valid = (
-                    isinstance(rule['priority'], int) and rule['priority'] >= 1
+                        isinstance(rule['priority'], int) and rule['priority'] >= 1
                 )
                 if not is_valid:
                     msg = f"{prefix}: priority must be positive integer"

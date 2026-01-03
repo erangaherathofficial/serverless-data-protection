@@ -84,9 +84,9 @@ class Masking(BaseProtection):
         end_mask = length - self._visible_chars - start_mask
 
         return (
-            self._mask_char * start_mask
-            + value[start_mask:start_mask + self._visible_chars]
-            + self._mask_char * end_mask
+                self._mask_char * start_mask
+                + value[start_mask:start_mask + self._visible_chars]
+                + self._mask_char * end_mask
         )
 
     def _get_metadata(self, original: str, protected: str) -> dict:
@@ -110,9 +110,9 @@ class Redaction(BaseProtection):
     DEFAULT_REDACTION = '[REDACTED]'
 
     def __init__(
-        self,
-        options: Optional[ProtectionOptions] = None,
-        redaction_text: Optional[str] = None
+            self,
+            options: Optional[ProtectionOptions] = None,
+            redaction_text: Optional[str] = None
     ) -> None:
         """Initialize redaction.
 
@@ -179,9 +179,9 @@ class EmailMasking(Masking):
             masked_local = self._mask_char * len(local_part)
         else:
             masked_local = (
-                local_part[0]
-                + self._mask_char * (len(local_part) - 2)
-                + local_part[-1]
+                    local_part[0]
+                    + self._mask_char * (len(local_part) - 2)
+                    + local_part[-1]
             )
 
         return f"{masked_local}@{domain}"

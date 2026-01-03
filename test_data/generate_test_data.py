@@ -5,12 +5,13 @@ and Parquet formats.
 """
 
 import io
-import json
 import random
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
+
+import json
 
 
 class SyntheticDataGenerator:
@@ -112,7 +113,7 @@ class SyntheticDataGenerator:
         return f"{year:04d}-{month:02d}-{day:02d}"
 
     def generate_record(
-        self, include_sensitive: bool = True
+            self, include_sensitive: bool = True
     ) -> dict[str, Any]:
         """Generate single record with PII data."""
         name = random.choice(self.UK_NAMES)
@@ -138,7 +139,7 @@ class SyntheticDataGenerator:
         return record
 
     def generate_csv_data(
-        self, rows: int, include_sensitive: bool = True
+            self, rows: int, include_sensitive: bool = True
     ) -> bytes:
         """Generate CSV data with specified number of rows."""
         records = [
@@ -148,7 +149,7 @@ class SyntheticDataGenerator:
         return df.to_csv(index=False).encode('utf-8')
 
     def generate_json_data(
-        self, records_count: int, nested: bool = False
+            self, records_count: int, nested: bool = False
     ) -> bytes:
         """Generate JSON data with specified number of records."""
         records = [self.generate_record() for _ in range(records_count)]

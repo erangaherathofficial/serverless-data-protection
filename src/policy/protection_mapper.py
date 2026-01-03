@@ -5,7 +5,6 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional, Protocol
 
 import pandas as pd
-
 from src.detection.presidio_detector import DetectionResult
 from src.policy.policy_parser import Policy, ProtectionOptions
 from src.policy.rule_evaluator import ProtectionAction, RuleEvaluator
@@ -32,7 +31,7 @@ class ProtectionPlan:
     total_protections: int = 0
 
     def add_column_plan(
-        self, column: str, plan: 'ColumnProtectionPlan'
+            self, column: str, plan: 'ColumnProtectionPlan'
     ) -> None:
         """Add protection plan for column."""
         self.column_plans[column] = plan
@@ -138,9 +137,9 @@ class ProtectionMapper:
         return self._strategy_registry.get(method_name)
 
     def create_protection_plan(
-        self,
-        _df: pd.DataFrame,
-        detection_result: DetectionResult
+            self,
+            _df: pd.DataFrame,
+            detection_result: DetectionResult
     ) -> ProtectionPlan:
         """Create protection plan from detection results.
 
@@ -204,8 +203,8 @@ class ProtectionMapper:
         return self._evaluator.get_protection_options(entity_type)
 
     def get_column_protection_summary(
-        self,
-        detection_result: DetectionResult
+            self,
+            detection_result: DetectionResult
     ) -> dict[str, dict[str, str]]:
         """Get summary of protection methods by column.
 
@@ -282,9 +281,9 @@ class ProtectionPlanExecutor:
         self._apply_functions: dict[str, Callable] = {}
 
     def register_apply_function(
-        self,
-        method_name: str,
-        func: Callable[[str, ProtectionOptions], str]
+            self,
+            method_name: str,
+            func: Callable[[str, ProtectionOptions], str]
     ) -> None:
         """Register function to apply protection method.
 
@@ -330,9 +329,9 @@ class ProtectionPlanExecutor:
         return result
 
     def _apply_protections(
-        self,
-        value: str,
-        actions: list[CellAction]
+            self,
+            value: str,
+            actions: list[CellAction]
     ) -> str:
         """Apply multiple protections to a value.
 

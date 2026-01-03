@@ -1,11 +1,9 @@
 """Integration tests for audit trail."""
 
 import json
-
 from unittest.mock import MagicMock
 
 import pytest
-
 from src.audit.cloudwatch_logger import (
     AuditLogEntry,
     CloudWatchLogger,

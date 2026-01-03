@@ -4,7 +4,10 @@ Automated and Policy-Driven Data Protection for Cloud Data Lakes.
 
 ## Overview
 
-A serverless framework using AWS Lambda, S3, and Microsoft Presidio for automated PII detection and protection across Parquet, CSV, and JSON file formats. The system processes files uploaded to S3, detects personally identifiable information using NLP-based analysis, applies configurable protection methods, and maintains a comprehensive audit trail.
+A serverless framework using AWS Lambda, S3, and Microsoft Presidio for automated PII detection and protection across
+Parquet, CSV, and JSON file formats. The system processes files uploaded to S3, detects personally identifiable
+information using NLP-based analysis, applies configurable protection methods, and maintains a comprehensive audit
+trail.
 
 ## Key Features
 
@@ -169,37 +172,39 @@ See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for full options.
 ## Supported PII Types
 
 ### Standard Entities
-| Entity | Description |
-|--------|-------------|
-| `EMAIL_ADDRESS` | Email addresses |
-| `PHONE_NUMBER` | Phone numbers |
-| `CREDIT_CARD` | Credit card numbers |
-| `PERSON` | Person names |
-| `LOCATION` | Addresses, places |
-| `DATE_TIME` | Dates and times |
-| `IP_ADDRESS` | IP addresses |
-| `IBAN_CODE` | Bank account numbers |
+
+| Entity          | Description          |
+|-----------------|----------------------|
+| `EMAIL_ADDRESS` | Email addresses      |
+| `PHONE_NUMBER`  | Phone numbers        |
+| `CREDIT_CARD`   | Credit card numbers  |
+| `PERSON`        | Person names         |
+| `LOCATION`      | Addresses, places    |
+| `DATE_TIME`     | Dates and times      |
+| `IP_ADDRESS`    | IP addresses         |
+| `IBAN_CODE`     | Bank account numbers |
 
 ### UK-Specific Entities
-| Entity | Description |
-|--------|-------------|
-| `UK_NHS` | NHS numbers |
-| `UK_NINO` | National Insurance numbers |
-| `UK_POSTCODE` | UK postal codes |
-| `UK_PHONE` | UK phone formats |
-| `UK_DRIVERS_LICENSE` | Driving licence numbers |
-| `UK_PASSPORT` | UK passport numbers |
-| `UK_BANK_ACCOUNT` | UK bank accounts |
-| `UK_VRN` | Vehicle registration numbers |
+
+| Entity               | Description                  |
+|----------------------|------------------------------|
+| `UK_NHS`             | NHS numbers                  |
+| `UK_NINO`            | National Insurance numbers   |
+| `UK_POSTCODE`        | UK postal codes              |
+| `UK_PHONE`           | UK phone formats             |
+| `UK_DRIVERS_LICENSE` | Driving licence numbers      |
+| `UK_PASSPORT`        | UK passport numbers          |
+| `UK_BANK_ACCOUNT`    | UK bank accounts             |
+| `UK_VRN`             | Vehicle registration numbers |
 
 ## Protection Methods
 
-| Method | Type | Description |
-|--------|------|-------------|
+| Method           | Type       | Description                     |
+|------------------|------------|---------------------------------|
 | `aes256_encrypt` | Reversible | AES-256-CBC encryption with KMS |
-| `sha256_hash` | One-way | SHA-256 cryptographic hash |
-| `masking` | One-way | Partial character masking |
-| `tokenization` | Reversible | Surrogate value replacement |
+| `sha256_hash`    | One-way    | SHA-256 cryptographic hash      |
+| `masking`        | One-way    | Partial character masking       |
+| `tokenization`   | Reversible | Surrogate value replacement     |
 
 ## Design Patterns
 
@@ -255,6 +260,7 @@ python scripts/run_tests.py coverage
 ## Performance
 
 Tested performance targets:
+
 - 1KB file: <5 seconds
 - 10KB file: <10 seconds
 - 100KB file: <30 seconds

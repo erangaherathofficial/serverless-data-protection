@@ -19,12 +19,12 @@ class SHA256Hashing(BaseProtection):
     """
 
     def __init__(
-        self,
-        options: Optional[ProtectionOptions] = None,
-        salt: Optional[str] = None,
-        use_hmac: bool = False,
-        hmac_key: Optional[bytes] = None,
-        truncate_length: Optional[int] = None
+            self,
+            options: Optional[ProtectionOptions] = None,
+            salt: Optional[str] = None,
+            use_hmac: bool = False,
+            hmac_key: Optional[bytes] = None,
+            truncate_length: Optional[int] = None
     ) -> None:
         """Initialize SHA-256 hashing.
 
@@ -159,10 +159,10 @@ class SHA512Hashing(BaseProtection):
     """
 
     def __init__(
-        self,
-        options: Optional[ProtectionOptions] = None,
-        salt: Optional[str] = None,
-        truncate_length: Optional[int] = None
+            self,
+            options: Optional[ProtectionOptions] = None,
+            salt: Optional[str] = None,
+            truncate_length: Optional[int] = None
     ) -> None:
         """Initialize SHA-512 hashing.
 

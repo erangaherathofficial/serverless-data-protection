@@ -42,7 +42,7 @@ class TestAWSClientManager:
         assert manager._s3_client is not None
 
     def test_dynamodb_client_lazy_initialization(
-        self, env_vars, aws_credentials
+            self, env_vars, aws_credentials
     ):
         """Verify DynamoDB client is lazily initialized."""
         manager = get_client_manager()

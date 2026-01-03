@@ -118,9 +118,9 @@ class DynamoDBWriter:
     DEFAULT_TTL_DAYS = 90
 
     def __init__(
-        self,
-        table_name: Optional[str] = None,
-        ttl_days: int = DEFAULT_TTL_DAYS
+            self,
+            table_name: Optional[str] = None,
+            ttl_days: int = DEFAULT_TTL_DAYS
     ) -> None:
         """Initialize DynamoDB writer.
 
@@ -146,17 +146,17 @@ class DynamoDBWriter:
         return self._table
 
     def write_processing_record(
-        self,
-        request_id: str,
-        source_bucket: str,
-        source_key: str,
-        file_format: str,
-        file_size: int,
-        success: bool,
-        duration_ms: float,
-        secure_bucket: Optional[str] = None,
-        secure_key: Optional[str] = None,
-        error: Optional[str] = None
+            self,
+            request_id: str,
+            source_bucket: str,
+            source_key: str,
+            file_format: str,
+            file_size: int,
+            success: bool,
+            duration_ms: float,
+            secure_bucket: Optional[str] = None,
+            secure_key: Optional[str] = None,
+            error: Optional[str] = None
     ) -> Optional[str]:
         """Write processing activity record.
 
@@ -197,15 +197,15 @@ class DynamoDBWriter:
         return self._write_record(record)
 
     def write_detection_record(
-        self,
-        request_id: str,
-        file_name: str,
-        total_entities: int,
-        entity_types: dict[str, int],
-        columns_with_pii: list[str],
-        cells_scanned: int,
-        cells_with_pii: int,
-        duration_ms: float
+            self,
+            request_id: str,
+            file_name: str,
+            total_entities: int,
+            entity_types: dict[str, int],
+            columns_with_pii: list[str],
+            cells_scanned: int,
+            cells_with_pii: int,
+            duration_ms: float
     ) -> Optional[str]:
         """Write PII detection record.
 
@@ -242,12 +242,12 @@ class DynamoDBWriter:
         return self._write_record(record)
 
     def write_protection_record(
-        self,
-        request_id: str,
-        file_name: str,
-        protections_applied: int,
-        methods_used: dict[str, int],
-        duration_ms: float
+            self,
+            request_id: str,
+            file_name: str,
+            protections_applied: int,
+            methods_used: dict[str, int],
+            duration_ms: float
     ) -> Optional[str]:
         """Write protection action record.
 
@@ -278,10 +278,10 @@ class DynamoDBWriter:
         return self._write_record(record)
 
     def write_entity_records(
-        self,
-        request_id: str,
-        file_name: str,
-        entities: list[dict]
+            self,
+            request_id: str,
+            file_name: str,
+            entities: list[dict]
     ) -> int:
         """Write individual entity records.
 
@@ -317,10 +317,10 @@ class DynamoDBWriter:
         return written
 
     def query_by_file(
-        self,
-        bucket: str,
-        key: str,
-        limit: int = 100
+            self,
+            bucket: str,
+            key: str,
+            limit: int = 100
     ) -> list[dict]:
         """Query records for a specific file.
 
@@ -349,9 +349,9 @@ class DynamoDBWriter:
             return []
 
     def query_by_date(
-        self,
-        date: str,
-        limit: int = 100
+            self,
+            date: str,
+            limit: int = 100
     ) -> list[dict]:
         """Query records for a specific date.
 

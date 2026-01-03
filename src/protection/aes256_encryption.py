@@ -7,7 +7,6 @@ import secrets
 from typing import Optional
 
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-
 from src.policy.policy_parser import ProtectionOptions
 from src.protection.base_protection import BaseProtection, register_protection
 
@@ -35,11 +34,11 @@ class AES256Encryption(BaseProtection):
     """
 
     def __init__(
-        self,
-        options: Optional[ProtectionOptions] = None,
-        encryption_key: Optional[bytes] = None,
-        use_kms: bool = False,
-        kms_key_id: Optional[str] = None
+            self,
+            options: Optional[ProtectionOptions] = None,
+            encryption_key: Optional[bytes] = None,
+            use_kms: bool = False,
+            kms_key_id: Optional[str] = None
     ) -> None:
         """Initialize AES-256 encryption.
 

@@ -12,7 +12,6 @@ from typing import Callable
 
 import pandas as pd
 import pytest
-
 from src.handlers.csv_handler import CSVHandler
 from src.handlers.json_handler import JSONHandler
 from src.handlers.parquet_handler import ParquetHandler
@@ -183,9 +182,9 @@ class TestDataGenerator:
 
 
 def run_benchmark(
-    func: Callable,
-    iterations: int = 5,
-    warmup: int = 1
+        func: Callable,
+        iterations: int = 5,
+        warmup: int = 1
 ) -> BenchmarkSummary:
     """Run benchmark with multiple iterations.
 
@@ -308,7 +307,7 @@ class TestPipelinePerformance:
         (1000, 180000),  # 3 minutes - PII detection is slow on large files
     ])
     def test_pipeline_csv_performance(
-        self, pipeline, size_kb, expected_max_ms
+            self, pipeline, size_kb, expected_max_ms
     ):
         """Test pipeline performance with CSV files."""
         content, rows = TestDataGenerator.generate_csv(size_kb)

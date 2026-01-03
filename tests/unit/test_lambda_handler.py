@@ -98,7 +98,7 @@ class TestHandler:
 
     @patch('src.lambda_handler.get_client_manager')
     def test_handler_unsupported_format(
-        self, mock_cm, env_vars, mock_lambda_context, sample_s3_event
+            self, mock_cm, env_vars, mock_lambda_context, sample_s3_event
     ):
         """Test handler rejects unsupported file formats."""
         sample_s3_event['Records'][0]['s3']['object']['key'] = 'data.txt'
@@ -109,8 +109,8 @@ class TestHandler:
 
     @patch('src.lambda_handler.get_client_manager')
     def test_handler_processes_csv(
-        self, mock_cm, env_vars, mock_lambda_context,
-        sample_s3_event, sample_csv_content
+            self, mock_cm, env_vars, mock_lambda_context,
+            sample_s3_event, sample_csv_content
     ):
         """Test handler processes CSV file."""
         mock_manager = MagicMock()

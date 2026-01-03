@@ -6,7 +6,6 @@ from typing import Optional
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-
 from src.handlers.base_handler import BaseHandler, FileMetadata
 
 
@@ -133,7 +132,7 @@ class ParquetHandler(BaseHandler):
         return buffer.getvalue()
 
     def serialize_with_schema(
-        self, df: pd.DataFrame, schema: pa.Schema
+            self, df: pd.DataFrame, schema: pa.Schema
     ) -> bytes:
         """Serialize DataFrame with specific schema.
 

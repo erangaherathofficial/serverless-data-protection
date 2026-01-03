@@ -8,7 +8,6 @@ from enum import Enum
 from typing import Any, Callable, Optional
 
 import pandas as pd
-
 from src.detection.presidio_detector import (
     DetectionResult,
     PresidioDetector,
@@ -117,10 +116,10 @@ class PipelineOrchestrator:
     """
 
     def __init__(
-        self,
-        policy: Optional[Policy] = None,
-        detector: Optional[PresidioDetector] = None,
-        fail_fast: bool = True
+            self,
+            policy: Optional[Policy] = None,
+            detector: Optional[PresidioDetector] = None,
+            fail_fast: bool = True
     ) -> None:
         """Initialize pipeline orchestrator.
 
@@ -338,7 +337,7 @@ class PipelineOrchestrator:
             )
 
     def _stage_evaluate(
-        self, detection_result: DetectionResult
+            self, detection_result: DetectionResult
     ) -> StageResult:
         """Stage 4: Evaluate policy and generate protection plan."""
         start = time.time()
@@ -367,10 +366,10 @@ class PipelineOrchestrator:
             )
 
     def _stage_protect(
-        self,
-        df: pd.DataFrame,
-        detection_result: DetectionResult,
-        evaluation_result: EvaluationResult
+            self,
+            df: pd.DataFrame,
+            detection_result: DetectionResult,
+            evaluation_result: EvaluationResult
     ) -> StageResult:
         """Stage 5: Apply protection techniques."""
         start = time.time()
@@ -435,9 +434,9 @@ class PipelineOrchestrator:
             )
 
     def _stage_schema_check(
-        self,
-        original_df: pd.DataFrame,
-        protected_df: pd.DataFrame
+            self,
+            original_df: pd.DataFrame,
+            protected_df: pd.DataFrame
     ) -> StageResult:
         """Stage 6: Validate schema preservation."""
         start = time.time()
@@ -507,9 +506,9 @@ class PipelineOrchestrator:
             )
 
     def register_hook(
-        self,
-        stage: PipelineStage,
-        hook: Callable
+            self,
+            stage: PipelineStage,
+            hook: Callable
     ) -> None:
         """Register a hook for a pipeline stage.
 
@@ -538,9 +537,9 @@ class PipelineOrchestrator:
         return (time.time() - start) * 1000
 
     def _finalize_result(
-        self,
-        result: PipelineResult,
-        start_time: float
+            self,
+            result: PipelineResult,
+            start_time: float
     ) -> PipelineResult:
         """Finalize pipeline result."""
         result.total_duration_ms = (time.time() - start_time) * 1000
@@ -548,8 +547,8 @@ class PipelineOrchestrator:
 
 
 def create_pipeline(
-    policy_path: Optional[str] = None,
-    score_threshold: float = 0.7
+        policy_path: Optional[str] = None,
+        score_threshold: float = 0.7
 ) -> PipelineOrchestrator:
     """Create configured pipeline orchestrator.
 

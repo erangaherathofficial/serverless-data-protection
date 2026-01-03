@@ -147,7 +147,7 @@ class ProtectionRegistry:
 
     @classmethod
     def register(
-        cls, method_name: str, strategy_class: type[BaseProtection]
+            cls, method_name: str, strategy_class: type[BaseProtection]
     ) -> None:
         """Register a protection strategy.
 
@@ -197,7 +197,9 @@ def register_protection(method_name: str):
         class MyProtection(BaseProtection):
             ...
     """
+
     def decorator(cls: type[BaseProtection]) -> type[BaseProtection]:
         ProtectionRegistry.register(method_name, cls)
         return cls
+
     return decorator

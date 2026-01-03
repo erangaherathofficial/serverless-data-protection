@@ -60,12 +60,12 @@ class Tokenization(BaseProtection):
     """
 
     def __init__(
-        self,
-        options: Optional[ProtectionOptions] = None,
-        vault: Optional[TokenVault] = None,
-        token_prefix: Optional[str] = None,
-        token_length: int = 16,
-        deterministic: bool = False
+            self,
+            options: Optional[ProtectionOptions] = None,
+            vault: Optional[TokenVault] = None,
+            token_prefix: Optional[str] = None,
+            token_length: int = 16,
+            deterministic: bool = False
     ) -> None:
         """Initialize tokenization.
 
@@ -177,10 +177,10 @@ class UUIDTokenization(BaseProtection):
     """
 
     def __init__(
-        self,
-        options: Optional[ProtectionOptions] = None,
-        vault: Optional[TokenVault] = None,
-        prefix: str = 'UUID_'
+            self,
+            options: Optional[ProtectionOptions] = None,
+            vault: Optional[TokenVault] = None,
+            prefix: str = 'UUID_'
     ) -> None:
         """Initialize UUID tokenization.
 
@@ -243,9 +243,9 @@ class FormatPreservingTokenization(BaseProtection):
     """
 
     def __init__(
-        self,
-        options: Optional[ProtectionOptions] = None,
-        vault: Optional[TokenVault] = None
+            self,
+            options: Optional[ProtectionOptions] = None,
+            vault: Optional[TokenVault] = None
     ) -> None:
         """Initialize format-preserving tokenization."""
         super().__init__(options)

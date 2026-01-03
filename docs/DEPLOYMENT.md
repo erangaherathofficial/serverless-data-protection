@@ -13,6 +13,7 @@ This guide covers deploying the serverless data protection framework to AWS.
 ## AWS Permissions Required
 
 The deployment user/role needs these permissions:
+
 - CloudFormation full access
 - S3 full access (or scoped to deployment bucket)
 - Lambda full access
@@ -92,6 +93,7 @@ sam deploy --guided
 ```
 
 Follow the prompts:
+
 - Stack Name: `data-protection-stack`
 - AWS Region: `eu-west-2` (or your preferred region)
 - SourceBucketName: `your-source-data-bucket`
@@ -236,6 +238,7 @@ aws cloudformation wait stack-delete-complete \
 ### Lambda Timeout
 
 If processing times out:
+
 1. Increase `LambdaTimeout` parameter
 2. Increase `LambdaMemorySize` for more CPU
 3. Check file size limits in policy
@@ -243,6 +246,7 @@ If processing times out:
 ### Permission Errors
 
 If Lambda can't access S3/DynamoDB:
+
 1. Check IAM role has required permissions
 2. Verify bucket names in environment variables
 3. Check KMS key permissions for encryption
@@ -250,6 +254,7 @@ If Lambda can't access S3/DynamoDB:
 ### Detection Issues
 
 If PII not detected:
+
 1. Check `DETECTION_THRESHOLD` setting
 2. Verify file format is supported
 3. Review CloudWatch logs for errors
@@ -257,6 +262,7 @@ If PII not detected:
 ### Memory Errors
 
 If Lambda runs out of memory:
+
 1. Increase `LambdaMemorySize`
 2. Process smaller files
 3. Enable chunked processing (future feature)
@@ -271,6 +277,7 @@ The deployment creates a CloudWatch dashboard at:
 ### Alarms
 
 Set up alarms for:
+
 - Error rate > 5%
 - Processing duration > 60 seconds
 - Memory utilization > 80%

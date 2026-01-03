@@ -256,11 +256,11 @@ def _process_record(record: dict, request_id: str) -> dict:
 
 
 def _create_audit_record(
-    request_id: str,
-    source_bucket: str,
-    source_key: str,
-    secure_key: Optional[str],
-    pipeline_result: PipelineResult
+        request_id: str,
+        source_bucket: str,
+        source_key: str,
+        secure_key: Optional[str],
+        pipeline_result: PipelineResult
 ) -> dict:
     """Create audit record for DynamoDB.
 
