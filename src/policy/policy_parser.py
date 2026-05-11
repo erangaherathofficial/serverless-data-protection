@@ -221,8 +221,11 @@ class PolicyParser:
                     self._validation_errors.append(msg)
 
             if 'priority' in rule:
+                priority = rule['priority']
                 is_valid = (
-                        isinstance(rule['priority'], int) and rule['priority'] >= 1
+                        isinstance(priority, int)
+                        and not isinstance(priority, bool)
+                        and priority >= 1
                 )
                 if not is_valid:
                     msg = f"{prefix}: priority must be positive integer"
@@ -235,7 +238,8 @@ class PolicyParser:
         """Validate protection options."""
         if 'visible_chars' in options:
             val = options['visible_chars']
-            if not isinstance(val, int) or val < 0:
+            if (not isinstance(val, int) or isinstance(val, bool)
+                    or val < 0):
                 msg = f"{prefix}: visible_chars must be non-negative integer"
                 self._validation_errors.append(msg)
 
@@ -257,7 +261,10 @@ class PolicyParser:
         """Validate policy settings."""
         if 'confidence_threshold' in settings:
             threshold = settings['confidence_threshold']
-            valid_type = isinstance(threshold, (int, float))
+            valid_type = (
+                    isinstance(threshold, (int, float))
+                    and not isinstance(threshold, bool)
+            )
             in_range = 0 <= threshold <= 1 if valid_type else False
             if not valid_type or not in_range:
                 msg = "confidence_threshold must be between 0 and 1"
@@ -274,11 +281,11 @@ class PolicyParser:
 
     def _build_policy(self, data: dict) -> Policy:
         """Build Policy object from validated data."""
-        rules = [ProtectionRule.from_dict(r) for r in data.get('rules', [])]
+        rules = [ProtectionRule.from_dict(r) for r in data['rules']]
         rules.sort(key=lambda r: r.priority)
 
         return Policy(
-            version=str(data.get('version', '1.0')),
+            version=str(data['version']),
             description=data.get('description', ''),
             settings=PolicySettings.from_dict(data.get('settings')),
             rules=rules,

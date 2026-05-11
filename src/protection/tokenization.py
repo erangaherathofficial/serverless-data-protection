@@ -58,6 +58,7 @@ class Tokenization(BaseProtection):
     """
 
     TOKEN_LENGTH = 16
+    _ALPHABET = string.ascii_uppercase + string.digits
 
     def __init__(
             self,
@@ -102,6 +103,7 @@ class Tokenization(BaseProtection):
         return original
 
     def _generate_token(self) -> str:
-        chars = string.ascii_uppercase + string.digits
-        body = ''.join(secrets.choice(chars) for _ in range(self.TOKEN_LENGTH))
+        body = ''.join(
+            secrets.choice(self._ALPHABET) for _ in range(self.TOKEN_LENGTH)
+        )
         return f"{self._token_prefix}{body}"

@@ -41,7 +41,7 @@ class ParquetHandler(BaseHandler):
         Returns:
             True if valid Parquet
         """
-        if not content or len(content) == 0:
+        if not content:
             self._add_validation_error("File is empty")
             return False
 

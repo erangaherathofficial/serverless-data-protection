@@ -138,7 +138,6 @@ class SchemaValidator:
                 f"{strict_types}."
             )
         self._strict_types = strict_types
-        self._allow_type_widening = allow_type_widening
         self._validate_row_count = validate_row_count
 
     def validate(

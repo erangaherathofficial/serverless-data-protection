@@ -190,11 +190,11 @@ class TestHandlerPerformance:
         handler = CSVHandler()
 
         def benchmark():
-            start = time.time()
+            start = time.monotonic()
             handler.validate(content, 'test.csv')
             df = handler.parse(content)
             handler.serialize(df)
-            return (time.time() - start) * 1000
+            return (time.monotonic() - start) * 1000
 
         summary = run_benchmark(benchmark, iterations=3)
 
@@ -212,11 +212,11 @@ class TestHandlerPerformance:
         handler = JSONHandler()
 
         def benchmark():
-            start = time.time()
+            start = time.monotonic()
             handler.validate(content, 'test.json')
             df = handler.parse(content)
             handler.serialize(df)
-            return (time.time() - start) * 1000
+            return (time.monotonic() - start) * 1000
 
         summary = run_benchmark(benchmark, iterations=3)
 
@@ -233,11 +233,11 @@ class TestHandlerPerformance:
         handler = ParquetHandler()
 
         def benchmark():
-            start = time.time()
+            start = time.monotonic()
             handler.validate(content, 'test.parquet')
             df = handler.parse(content)
             handler.serialize(df)
-            return (time.time() - start) * 1000
+            return (time.monotonic() - start) * 1000
 
         summary = run_benchmark(benchmark, iterations=3)
 
@@ -292,9 +292,9 @@ class TestPipelinePerformance:
         """Test pipeline with a larger file (10MB) within a 10-minute budget."""
         content, rows = DataGenerator.generate_csv(10000)
 
-        start = time.time()
+        start = time.monotonic()
         result = pipeline.process(content, 'large_test.csv')
-        duration_ms = (time.time() - start) * 1000
+        duration_ms = (time.monotonic() - start) * 1000
 
         print(f"\nLarge file test (10MB, {rows} rows):")
         print(f"  Duration: {duration_ms:.2f}ms")
@@ -323,9 +323,9 @@ class TestDetectionPerformance:
             }
             df = pd.DataFrame(data)
 
-            start = time.time()
+            start = time.monotonic()
             detector.detect_dataframe(df)
-            duration = (time.time() - start) * 1000
+            duration = (time.monotonic() - start) * 1000
 
             results.append((rows, duration))
             print(f"\nDetection {rows} rows: {duration:.2f}ms")

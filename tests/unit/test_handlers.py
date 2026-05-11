@@ -15,6 +15,8 @@ from src.handlers.handler_factory import (
 from src.handlers.json_handler import JSONHandler
 from src.handlers.parquet_handler import ParquetHandler
 
+pytestmark = pytest.mark.unit
+
 
 class TestCSVHandler:
     """Tests for CSV handler."""

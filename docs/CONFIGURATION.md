@@ -82,9 +82,11 @@ and `token_prefix`. Unknown keys are silently dropped.
 Reversible encryption using AES-256-CBC with PKCS7 padding. The data key
 defaults to a per-container random key, which is appropriate for
 write-only workflows. To make ciphertext portable across cold starts,
-either set the `ENCRYPTION_KEY` environment variable to a base64-encoded
-32-byte key, or instantiate `AES256Encryption(use_kms=True,
-kms_key_id=<id>)` to fetch a data key from AWS KMS.
+set the `ENCRYPTION_KEY` environment variable to a base64-encoded 32-byte
+key. The optional `use_kms=True` path calls
+`kms:GenerateDataKey` to source the key from AWS KMS; it produces a fresh
+data key on each cold start (the wrapped `CiphertextBlob` is not persisted
+alongside the ciphertext), so it is not portable across invocations.
 
 Output format: `ENC:{base64_encoded_iv_and_ciphertext}`
 

@@ -11,6 +11,5 @@ RUN pip install --no-cache-dir \
 
 COPY src/ ${LAMBDA_TASK_ROOT}/src/
 COPY policies/ ${LAMBDA_TASK_ROOT}/policies/
-RUN chmod -R 755 ${LAMBDA_TASK_ROOT}/src/ ${LAMBDA_TASK_ROOT}/policies/
 
 CMD ["src.lambda_handler.handler"]

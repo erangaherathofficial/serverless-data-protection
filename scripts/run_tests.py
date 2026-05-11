@@ -47,7 +47,7 @@ def run_unit_tests(verbose: bool = False) -> int:
 
 def run_integration_tests(verbose: bool = False) -> int:
     """Run integration tests."""
-    cmd = ['pytest', 'tests/integration/', '-v', '-m', 'integration']
+    cmd = ['pytest', 'tests/integration/', '-v']
     if verbose:
         cmd.append('-s')
     return run_command(cmd, 'Integration Tests')
@@ -63,7 +63,7 @@ def run_security_tests(verbose: bool = False) -> int:
 
 def run_performance_tests(verbose: bool = False) -> int:
     """Run performance tests."""
-    cmd = ['pytest', 'tests/performance/', '-v', '-m', 'performance']
+    cmd = ['pytest', 'tests/performance/', '-v']
     if verbose:
         cmd.append('-s')
     return run_command(cmd, 'Performance Tests')

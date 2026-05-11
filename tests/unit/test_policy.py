@@ -17,6 +17,8 @@ from src.policy.rule_evaluator import (
     RuleEvaluator,
 )
 
+pytestmark = pytest.mark.unit
+
 
 class TestProtectionOptions:
     """Tests for ProtectionOptions dataclass."""

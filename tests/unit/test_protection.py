@@ -16,6 +16,8 @@ from src.protection.tokenization import (
     clear_global_vault,
 )
 
+pytestmark = pytest.mark.unit
+
 
 class TestProtectionRegistry:
     """Tests for protection registry."""

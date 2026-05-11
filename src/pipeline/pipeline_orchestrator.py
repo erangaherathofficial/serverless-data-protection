@@ -92,7 +92,7 @@ class PipelineOrchestrator:
         self._rule_evaluator = RuleEvaluator(self._policy)
 
     def process(self, content: bytes, file_name: str) -> PipelineResult:
-        start_time = time.time()
+        start_time = time.monotonic()
 
         result = PipelineResult(
             success=True,
@@ -160,7 +160,7 @@ class PipelineOrchestrator:
         return self._finalize_result(result, start_time)
 
     def _stage_receive(self, content: bytes, file_name: str) -> StageResult:
-        start = time.time()
+        start = time.monotonic()
         try:
             if not content:
                 return StageResult(
@@ -197,7 +197,7 @@ class PipelineOrchestrator:
             )
 
     def _stage_validate(self, content: bytes, file_name: str) -> StageResult:
-        start = time.time()
+        start = time.monotonic()
         try:
             handler = get_handler(file_name)
             processed_data = handler.process(content, file_name)
@@ -224,7 +224,7 @@ class PipelineOrchestrator:
             )
 
     def _stage_detect(self, df: pd.DataFrame) -> StageResult:
-        start = time.time()
+        start = time.monotonic()
         try:
             detection_result = self._detector.detect_dataframe(df)
 
@@ -254,7 +254,7 @@ class PipelineOrchestrator:
     def _stage_evaluate(
             self, detection_result: DetectionResult
     ) -> StageResult:
-        start = time.time()
+        start = time.monotonic()
         try:
             evaluation_result = self._rule_evaluator.evaluate(detection_result)
 
@@ -279,7 +279,7 @@ class PipelineOrchestrator:
             df: pd.DataFrame,
             evaluation_result: EvaluationResult
     ) -> StageResult:
-        start = time.time()
+        start = time.monotonic()
         try:
             protected_df = df.copy()
             protection_counts: dict[str, int] = {}
@@ -361,7 +361,7 @@ class PipelineOrchestrator:
             original_df: pd.DataFrame,
             protected_df: pd.DataFrame
     ) -> StageResult:
-        start = time.time()
+        start = time.monotonic()
         try:
             validation_result = self._schema_validator.validate(
                 original_df, protected_df
@@ -393,7 +393,7 @@ class PipelineOrchestrator:
     def _stage_output(
             self, df: pd.DataFrame, handler: BaseHandler
     ) -> StageResult:
-        start = time.time()
+        start = time.monotonic()
         try:
             serialized = handler.serialize(df)
 
@@ -417,14 +417,14 @@ class PipelineOrchestrator:
             )
 
     def _elapsed_ms(self, start: float) -> float:
-        return (time.time() - start) * 1000
+        return (time.monotonic() - start) * 1000
 
     def _finalize_result(
             self,
             result: PipelineResult,
             start_time: float
     ) -> PipelineResult:
-        result.total_duration_ms = (time.time() - start_time) * 1000
+        result.total_duration_ms = (time.monotonic() - start_time) * 1000
         return result
 
 

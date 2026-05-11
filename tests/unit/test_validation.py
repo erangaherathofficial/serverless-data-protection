@@ -11,6 +11,8 @@ from src.validation.schema_validator import (
     ValidationSeverity,
 )
 
+pytestmark = pytest.mark.unit
+
 
 class TestSchemaInfo:
     """Tests for SchemaInfo dataclass."""

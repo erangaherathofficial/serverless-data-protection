@@ -41,6 +41,8 @@ class RuleEvaluator:
     either a rule-driven one or a fallback using `settings.default_protection`.
     """
 
+    _FALLBACK_PRIORITY = 999
+
     def __init__(self, policy: Policy) -> None:
         self._policy = policy
         self._rule_cache: dict[str, Optional[ProtectionRule]] = {}
@@ -91,7 +93,7 @@ class RuleEvaluator:
             entity=entity,
             protection_method=self._policy.settings.default_protection,
             options=ProtectionOptions(),
-            priority=999,
+            priority=self._FALLBACK_PRIORITY,
         )
 
     def _get_rule(self, entity_type: str) -> Optional[ProtectionRule]:

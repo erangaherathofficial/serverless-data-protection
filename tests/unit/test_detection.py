@@ -16,6 +16,8 @@ from src.detection.presidio_detector import (
     PresidioDetector,
 )
 
+pytestmark = pytest.mark.unit
+
 
 class TestPIIEntity:
     """Tests for PIIEntity dataclass."""

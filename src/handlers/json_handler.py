@@ -71,7 +71,7 @@ class JSONHandler(BaseHandler):
         try:
             data = json.loads(text)
         except json.JSONDecodeError as e:
-            if '\n' in text:
+            if has_newlines:
                 return self._validate_ndjson(text)
             self._add_validation_error(f"Invalid JSON: {e}")
             return False

@@ -17,7 +17,6 @@ class AccuracyMetrics:
     true_positives: int = 0
     false_positives: int = 0
     false_negatives: int = 0
-    true_negatives: int = 0
 
     @property
     def precision(self) -> float:
@@ -115,8 +114,6 @@ class TestEmailDetectionAccuracy:
                 metrics.false_negatives += 1
             elif not labeled.is_pii and detected:
                 metrics.false_positives += 1
-            else:
-                metrics.true_negatives += 1
 
         prec = metrics.precision
         assert prec >= 0.85, f"Precision {prec:.2f} below 0.85"
@@ -191,8 +188,6 @@ class TestPhoneDetectionAccuracy:
                 metrics.false_negatives += 1
             elif not labeled.is_pii and detected:
                 metrics.false_positives += 1
-            else:
-                metrics.true_negatives += 1
 
         f1 = metrics.f1_score
         assert f1 >= 0.9, f"F1 {f1:.2f} below 0.9"
@@ -250,8 +245,6 @@ class TestCreditCardDetectionAccuracy:
                 metrics.false_negatives += 1
             elif not labeled.is_pii and detected:
                 metrics.false_positives += 1
-            else:
-                metrics.true_negatives += 1
 
         f1 = metrics.f1_score
         assert f1 >= 0.9, f"F1 {f1:.2f} below 0.9"
@@ -337,8 +330,6 @@ class TestDataFrameDetectionAccuracy:
                     metrics[column].false_negatives += 1
                 elif not has_pii and detected:
                     metrics[column].false_positives += 1
-                else:
-                    metrics[column].true_negatives += 1
 
         for column, m in metrics.items():
             assert m.f1_score >= 0.9, (

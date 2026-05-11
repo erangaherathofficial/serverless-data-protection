@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import time
 import traceback
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -91,7 +92,7 @@ def handler(event: dict, context: Any) -> dict:
     Returns:
         Processing result with status and details
     """
-    start_time = datetime.now(timezone.utc)
+    start_time = time.monotonic()
     request_id = context.aws_request_id if context else 'local-test'
 
     logger.info(f"Processing started - Request ID: {request_id}")
@@ -129,8 +130,7 @@ def handler(event: dict, context: Any) -> dict:
         msg = f"Handler error: {str(e)}"
         return _build_response(500, msg, results, errors)
 
-    elapsed = datetime.now(timezone.utc) - start_time
-    duration_ms = elapsed.total_seconds() * 1000
+    duration_ms = (time.monotonic() - start_time) * 1000
     logger.info(
         f"Processing completed in {duration_ms:.2f}ms - "
         f"Success: {len(results)}, Errors: {len(errors)}"

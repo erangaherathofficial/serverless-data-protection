@@ -1,6 +1,10 @@
 """Unit tests for AWS Client Manager."""
 
+import pytest
+
 from src.aws.client_manager import AWSClientManager, get_client_manager
+
+pytestmark = pytest.mark.unit
 
 
 class TestAWSClientManager:

@@ -22,8 +22,7 @@ def validate_env() -> list[str]:
 def upload_to_raw(content: bytes, key: str, content_type: str) -> None:
     """Upload bytes to the configured raw bucket."""
     manager = get_client_manager()
-    bucket = os.environ['RAW_BUCKET_NAME']
-    manager.put_object(bucket, key, content, content_type)
+    manager.put_object(manager.raw_bucket, key, content, content_type)
 
 
 def wait_for_audit(
@@ -33,11 +32,9 @@ def wait_for_audit(
 ) -> Optional[dict]:
     """Poll DynamoDB for the audit record produced by the Lambda pipeline."""
     manager = get_client_manager()
-    table_name = os.environ['AUDIT_TABLE_NAME']
-    raw_bucket = os.environ['RAW_BUCKET_NAME']
-    pk = f"FILE#{raw_bucket}/{raw_key}"
+    pk = f"FILE#{manager.raw_bucket}/{raw_key}"
 
-    table = manager.dynamodb_resource.Table(table_name)
+    table = manager.dynamodb_resource.Table(manager.audit_table)
     deadline = time.monotonic() + timeout_seconds
 
     while time.monotonic() < deadline:
@@ -58,5 +55,4 @@ def wait_for_audit(
 def fetch_protected(secure_key: str) -> bytes:
     """Read the protected object from the secure bucket."""
     manager = get_client_manager()
-    bucket = os.environ['SECURE_BUCKET_NAME']
-    return manager.get_object(bucket, secure_key)
+    return manager.get_object(manager.secure_bucket, secure_key)

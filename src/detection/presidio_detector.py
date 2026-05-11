@@ -1,6 +1,6 @@
 """PII detection using Microsoft Presidio."""
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from presidio_analyzer import AnalyzerEngine
 from presidio_analyzer.nlp_engine import NlpEngineProvider
 from typing import Optional
@@ -22,15 +22,7 @@ class PIIEntity:
 
     def to_dict(self) -> dict:
         """Convert to dictionary."""
-        return {
-            'entity_type': self.entity_type,
-            'text': self.text,
-            'start': self.start,
-            'end': self.end,
-            'score': self.score,
-            'column_name': self.column_name,
-            'row_index': self.row_index
-        }
+        return asdict(self)
 
 
 @dataclass
@@ -54,13 +46,9 @@ class DetectionResult:
 
     def to_dict(self) -> dict:
         """Convert to dictionary for serialization."""
-        return {
-            'entities': [e.to_dict() for e in self.entities],
-            'entity_counts': self.entity_counts,
-            'columns_with_pii': list(self.columns_with_pii),
-            'total_cells_scanned': self.total_cells_scanned,
-            'cells_with_pii': self.cells_with_pii
-        }
+        d = asdict(self)
+        d['columns_with_pii'] = list(d['columns_with_pii'])
+        return d
 
 
 class PresidioDetector:
@@ -192,7 +180,8 @@ class PresidioDetector:
         if columns is None:
             columns = [
                 col for col in df.columns
-                if df[col].dtype == 'object' or str(df[col].dtype) == 'string'
+                if (dtype := str(df[col].dtype)) == 'object'
+                   or dtype.startswith('string')
             ]
 
         for col in columns:

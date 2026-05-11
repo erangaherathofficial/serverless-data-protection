@@ -1,6 +1,7 @@
 """Unit tests for Lambda handler."""
 
 import json
+import pytest
 from unittest.mock import MagicMock, patch
 
 from src.lambda_handler import (
@@ -8,6 +9,8 @@ from src.lambda_handler import (
     _build_response,
     handler,
 )
+
+pytestmark = pytest.mark.unit
 
 
 class TestHelperFunctions:
