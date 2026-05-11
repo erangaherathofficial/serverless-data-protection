@@ -1,11 +1,10 @@
 """AWS Client Manager - Singleton pattern for shared AWS resources."""
 
+import boto3
 import os
+from botocore.config import Config
 from threading import Lock
 from typing import Optional
-
-import boto3
-from botocore.config import Config
 
 
 class AWSClientManager:
@@ -36,7 +35,7 @@ class AWSClientManager:
             read_timeout=30
         )
 
-        self._region = os.environ.get('AWS_REGION', 'eu-west-2')
+        self._region = os.environ.get('AWS_REGION', 'us-east-1')
         self._raw_bucket = os.environ.get('RAW_BUCKET_NAME', '')
         self._secure_bucket = os.environ.get('SECURE_BUCKET_NAME', '')
         self._audit_table = os.environ.get('AUDIT_TABLE_NAME', '')

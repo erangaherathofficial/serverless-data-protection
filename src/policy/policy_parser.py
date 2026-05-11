@@ -1,19 +1,17 @@
 """YAML policy configuration parser."""
 
-import logging
+import yaml
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Union
-
-import yaml
-
-logger = logging.getLogger(__name__)
 
 
 class PolicyValidationError(Exception):
     """Raised when policy validation fails."""
 
-    def __init__(self, message: str, errors: Optional[list[str]] = None):
+    def __init__(
+            self, message: str, errors: Optional[list[str]] = None
+    ) -> None:
         super().__init__(message)
         self.errors = errors or []
 
@@ -25,25 +23,18 @@ class ProtectionOptions:
     mask_char: str = '*'
     visible_chars: int = 4
     direction: str = 'right'
-    preserve_length: bool = True
     token_prefix: str = 'TOK_'
-    extra: dict = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, data: Optional[dict]) -> 'ProtectionOptions':
         """Create from dictionary."""
         if not data:
             return cls()
-
         return cls(
             mask_char=data.get('mask_char', '*'),
             visible_chars=data.get('visible_chars', 4),
             direction=data.get('direction', 'right'),
-            preserve_length=data.get('preserve_length', True),
             token_prefix=data.get('token_prefix', 'TOK_'),
-            extra={k: v for k, v in data.items()
-                   if k not in ['mask_char', 'visible_chars', 'direction',
-                                'preserve_length', 'token_prefix']}
         )
 
 
@@ -56,7 +47,6 @@ class ProtectionRule:
     priority: int = 1
     description: str = ''
     options: ProtectionOptions = field(default_factory=ProtectionOptions)
-    conditions: dict = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, data: dict) -> 'ProtectionRule':
@@ -67,7 +57,6 @@ class ProtectionRule:
             priority=data.get('priority', 1),
             description=data.get('description', ''),
             options=ProtectionOptions.from_dict(data.get('options')),
-            conditions=data.get('conditions', {})
         )
 
 
@@ -77,30 +66,15 @@ class PolicySettings:
 
     default_protection: str = 'masking'
     confidence_threshold: float = 0.7
-    preserve_schema: bool = True
-    fail_on_error: bool = False
-    log_detections: bool = True
-    extra: dict = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, data: Optional[dict]) -> 'PolicySettings':
         """Create from dictionary."""
         if not data:
             return cls()
-
         return cls(
             default_protection=data.get('default_protection', 'masking'),
             confidence_threshold=data.get('confidence_threshold', 0.7),
-            preserve_schema=data.get('preserve_schema', True),
-            fail_on_error=data.get('fail_on_error', False),
-            log_detections=data.get('log_detections', True),
-            extra={
-                k: v for k, v in data.items()
-                if k not in [
-                    'default_protection', 'confidence_threshold',
-                    'preserve_schema', 'fail_on_error', 'log_detections'
-                ]
-            }
         )
 
 
@@ -112,7 +86,6 @@ class Policy:
     description: str
     settings: PolicySettings
     rules: list[ProtectionRule]
-    metadata: dict = field(default_factory=dict)
 
     def get_rule_for_entity(
             self, entity_type: str
@@ -122,45 +95,6 @@ class Policy:
         if not matching:
             return None
         return min(matching, key=lambda r: r.priority)
-
-    def get_rules_by_method(self, method: str) -> list[ProtectionRule]:
-        """Get all rules using a specific protection method."""
-        return [r for r in self.rules if r.protection_method == method]
-
-    def get_entity_types(self) -> set[str]:
-        """Get all entity types covered by rules."""
-        return {r.entity_type for r in self.rules}
-
-    def to_dict(self) -> dict:
-        """Convert policy to dictionary."""
-        return {
-            'version': self.version,
-            'description': self.description,
-            'settings': {
-                'default_protection': self.settings.default_protection,
-                'confidence_threshold': self.settings.confidence_threshold,
-                'preserve_schema': self.settings.preserve_schema,
-                'fail_on_error': self.settings.fail_on_error,
-                'log_detections': self.settings.log_detections,
-                **self.settings.extra
-            },
-            'rules': [
-                {
-                    'entity_type': r.entity_type,
-                    'protection_method': r.protection_method,
-                    'priority': r.priority,
-                    'description': r.description,
-                    'options': {
-                        'mask_char': r.options.mask_char,
-                        'visible_chars': r.options.visible_chars,
-                        'direction': r.options.direction,
-                        **r.options.extra
-                    } if r.options else {}
-                }
-                for r in self.rules
-            ],
-            'metadata': self.metadata
-        }
 
 
 class PolicyParser:
@@ -172,7 +106,6 @@ class PolicyParser:
         'masking',
         'tokenization',
         'redact',
-        'none'
     ]
 
     VALID_DIRECTIONS = ['left', 'right', 'center']
@@ -183,46 +116,28 @@ class PolicyParser:
         Args:
             policy_dir: Directory containing policy files
         """
-        self._policy_dir = policy_dir or self._get_default_policy_dir()
+        if policy_dir is None:
+            policy_dir = str(Path(__file__).parent.parent.parent / 'policies')
+        self._policy_dir = policy_dir
         self._validation_errors: list[str] = []
-
-    @property
-    def validation_errors(self) -> list[str]:
-        """Get validation errors from last parse."""
-        return self._validation_errors.copy()
 
     def parse_file(self, file_path: Union[str, Path]) -> Policy:
         """Parse policy from YAML file.
-
-        Args:
-            file_path: Path to YAML policy file
-
-        Returns:
-            Parsed Policy object
 
         Raises:
             PolicyValidationError: If policy is invalid
             FileNotFoundError: If file doesn't exist
         """
         path = Path(file_path)
-
         if not path.exists():
             raise FileNotFoundError(f"Policy file not found: {path}")
 
         with open(path, 'r', encoding='utf-8') as f:
             content = f.read()
-
         return self.parse_string(content, source=str(path))
 
     def parse_string(self, content: str, source: str = '<string>') -> Policy:
         """Parse policy from YAML string.
-
-        Args:
-            content: YAML content string
-            source: Source identifier for error messages
-
-        Returns:
-            Parsed Policy object
 
         Raises:
             PolicyValidationError: If policy is invalid
@@ -232,54 +147,30 @@ class PolicyParser:
         try:
             data = yaml.safe_load(content)
         except yaml.YAMLError as e:
-            raise PolicyValidationError(f"Invalid YAML in {source}: {e}")
+            raise PolicyValidationError(
+                f"Invalid YAML in {source}: {e}"
+            ) from e
 
         if not isinstance(data, dict):
-            msg = f"Policy must be a YAML mapping in {source}"
-            raise PolicyValidationError(msg)
+            raise PolicyValidationError(
+                f"Policy must be a YAML mapping in {source}"
+            )
 
         self._validate_policy(data)
 
         if self._validation_errors:
             raise PolicyValidationError(
                 f"Policy validation failed in {source}",
-                errors=self._validation_errors
-            )
-
-        return self._build_policy(data)
-
-    def parse_dict(self, data: dict) -> Policy:
-        """Parse policy from dictionary.
-
-        Args:
-            data: Policy dictionary
-
-        Returns:
-            Parsed Policy object
-        """
-        self._validation_errors = []
-        self._validate_policy(data)
-
-        if self._validation_errors:
-            raise PolicyValidationError(
-                "Policy validation failed",
-                errors=self._validation_errors
+                errors=self._validation_errors,
             )
 
         return self._build_policy(data)
 
     def load_default_policy(self) -> Policy:
-        """Load default policy from policy directory.
-
-        Returns:
-            Default Policy object
-        """
-        default_path = Path(self._policy_dir) / 'protection_policy.yaml'
-
-        if default_path.exists():
-            return self.parse_file(default_path)
-
-        return self._create_default_policy()
+        """Load the bundled default policy from the policy directory."""
+        return self.parse_file(
+            Path(self._policy_dir) / 'protection_policy.yaml'
+        )
 
     def _validate_policy(self, data: dict) -> None:
         """Validate policy structure and values."""
@@ -314,7 +205,7 @@ class PolicyParser:
                 entity_type = rule['entity_type']
                 if entity_type in entity_types_seen:
                     msg = f"Duplicate rule for entity type: {entity_type}"
-                    logger.warning(msg)
+                    self._validation_errors.append(msg)
                 entity_types_seen.add(entity_type)
 
             if 'protection_method' not in rule:
@@ -391,52 +282,12 @@ class PolicyParser:
             description=data.get('description', ''),
             settings=PolicySettings.from_dict(data.get('settings')),
             rules=rules,
-            metadata=data.get('metadata', {})
         )
-
-    def _create_default_policy(self) -> Policy:
-        """Create default policy when no file exists."""
-        return Policy(
-            version='1.0',
-            description='Default protection policy',
-            settings=PolicySettings(),
-            rules=[
-                ProtectionRule(
-                    entity_type='EMAIL_ADDRESS',
-                    protection_method='sha256_hash',
-                    priority=1
-                ),
-                ProtectionRule(
-                    entity_type='CREDIT_CARD',
-                    protection_method='aes256_encrypt',
-                    priority=1
-                ),
-                ProtectionRule(
-                    entity_type='PHONE_NUMBER',
-                    protection_method='masking',
-                    priority=2
-                ),
-            ]
-        )
-
-    def _get_default_policy_dir(self) -> str:
-        """Get default policy directory path."""
-        current = Path(__file__).parent.parent.parent
-        return str(current / 'policies')
 
 
 def load_policy(path: Optional[Union[str, Path]] = None) -> Policy:
-    """Convenience function to load policy.
-
-    Args:
-        path: Optional path to policy file
-
-    Returns:
-        Parsed Policy object
-    """
+    """Load a policy from ``path`` if given, otherwise the bundled default."""
     parser = PolicyParser()
-
     if path:
         return parser.parse_file(path)
-
     return parser.load_default_policy()

@@ -4,9 +4,10 @@ import base64
 import logging
 import os
 import secrets
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from typing import Optional
 
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from src.aws.client_manager import get_client_manager
 from src.policy.policy_parser import ProtectionOptions
 from src.protection.base_protection import BaseProtection, register_protection
 
@@ -99,7 +100,7 @@ class AES256Encryption(BaseProtection):
 
         except Exception as e:
             logger.error(f"Encryption failed: {e}")
-            raise EncryptionError(f"Failed to encrypt value: {e}")
+            raise EncryptionError(f"Failed to encrypt value: {e}") from e
 
     def _do_unprotect(self, value: str) -> str:
         """Decrypt an AES-256 encrypted value.
@@ -136,9 +137,11 @@ class AES256Encryption(BaseProtection):
             plaintext = self._unpad(padded)
             return plaintext.decode('utf-8')
 
+        except DecryptionError:
+            raise
         except Exception as e:
             logger.error(f"Decryption failed: {e}")
-            raise DecryptionError(f"Failed to decrypt value: {e}")
+            raise DecryptionError(f"Failed to decrypt value: {e}") from e
 
     def _pad(self, data: bytes) -> bytes:
         """Apply PKCS7 padding."""
@@ -163,53 +166,43 @@ class AES256Encryption(BaseProtection):
         return data[:-padding_length]
 
     def _generate_or_fetch_key(self) -> bytes:
-        """Generate or fetch encryption key."""
-        if self._use_kms and self._kms_key_id:
+        """Generate or fetch encryption key.
+
+        Misconfigured KMS or ENCRYPTION_KEY inputs raise rather than silently
+        falling back to an ephemeral random key — a quiet downgrade would
+        break decryption across cold starts and hide the deployment problem.
+        """
+        if self._use_kms:
+            if not self._kms_key_id:
+                raise ValueError(
+                    "use_kms=True requires kms_key_id (or KMS_KEY_ID env var)"
+                )
             return self._fetch_key_from_kms()
 
         env_key = os.environ.get('ENCRYPTION_KEY')
         if env_key:
             key_bytes = base64.b64decode(env_key)
-            if len(key_bytes) == KEY_SIZE:
-                return key_bytes
+            if len(key_bytes) != KEY_SIZE:
+                raise ValueError(
+                    f"ENCRYPTION_KEY must decode to {KEY_SIZE} bytes, "
+                    f"got {len(key_bytes)}"
+                )
+            return key_bytes
 
         return secrets.token_bytes(KEY_SIZE)
 
     def _fetch_key_from_kms(self) -> bytes:
-        """Fetch or generate data key using AWS KMS."""
-        try:
-            from src.aws.client_manager import get_client_manager
+        """Fetch a data key from AWS KMS.
 
-            client_manager = get_client_manager()
-            response = client_manager.kms.generate_data_key(
-                KeyId=self._kms_key_id,
-                KeySpec='AES_256'
-            )
-            return response['Plaintext']
-
-        except Exception as e:
-            logger.warning(f"KMS key fetch failed: {e}. Using generated key.")
-            return secrets.token_bytes(KEY_SIZE)
-
-    def _get_metadata(self, original: str, protected: str) -> dict:
-        """Get encryption metadata."""
-        return {
-            'original_length': len(original),
-            'protected_length': len(protected),
-            'algorithm': 'AES-256-CBC',
-            'uses_kms': self._use_kms,
-            'has_iv': True
-        }
-
-    def rotate_key(self, new_key: bytes) -> None:
-        """Rotate the encryption key.
-
-        Args:
-            new_key: New 32-byte encryption key
+        Fails loudly when KMS is requested but unavailable rather than
+        silently substituting an ephemeral random key, which would render
+        ciphertext undecryptable across cold starts.
         """
-        if len(new_key) != KEY_SIZE:
-            raise ValueError(f"New key must be {KEY_SIZE} bytes")
-        self._key = new_key
+        response = get_client_manager().kms.generate_data_key(
+            KeyId=self._kms_key_id,
+            KeySpec='AES_256',
+        )
+        return response['Plaintext']
 
     @classmethod
     def generate_key(cls) -> bytes:

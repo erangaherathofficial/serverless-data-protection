@@ -12,11 +12,11 @@ trail.
 ## Key Features
 
 - **Multi-format Support**: CSV, JSON (including NDJSON), and Parquet
-- **PII Detection**: Microsoft Presidio with 15+ entity types including UK-specific patterns
-- **Flexible Protection**: AES-256 encryption, SHA-256 hashing, masking, tokenization
+- **PII Detection**: Microsoft Presidio with 18 entity types including UK-specific patterns
+- **Flexible Protection**: AES-256 encryption, SHA-256 hashing, masking, tokenization, redaction
 - **Policy-Driven**: YAML-based configuration for protection rules
 - **Schema Preservation**: Validates output matches input schema
-- **Audit Trail**: CloudWatch metrics and DynamoDB records
+- **Audit Trail**: CloudWatch logs and DynamoDB records
 - **Serverless**: Event-driven Lambda architecture
 
 ## Architecture
@@ -27,10 +27,10 @@ trail.
 ┌───────────────────┼───────────────────┬───────────────────┬─────────────────┤
 │    Ingestion      │    Detection      │     Policy        │    Security     │
 ├───────────────────┼───────────────────┼───────────────────┼─────────────────┤
-│  S3 Triggers      │  Presidio PII     │  YAML Engine      │  AES-256        │
-│  Lambda Handler   │  Custom UK        │  Rule Evaluation  │  SHA-256        │
-│  File Handlers    │  Recognizers      │  Protection Map   │  Masking        │
-│  Format Validate  │  NLP Analysis     │  Priority Rules   │  Tokenization   │
+│  S3 Triggers      │  Presidio PII     │  YAML Parser      │  AES-256        │
+│  Lambda Handler   │  Custom UK        │  Rule Evaluator   │  SHA-256        │
+│  File Handlers    │  Recognizers      │  Priority Rules   │  Masking        │
+│  Format Validate  │  NLP Analysis     │  Default Fallback │  Tokenization   │
 └───────────────────┴───────────────────┴───────────────────┴─────────────────┘
 ```
 
@@ -64,21 +64,22 @@ serverless-data-protection/
 │   │   └── custom_recognizers.py   # UK-specific patterns
 │   ├── policy/                     # Policy engine
 │   │   ├── policy_parser.py        # YAML parsing
-│   │   ├── rule_evaluator.py       # Rule matching
-│   │   └── protection_mapper.py    # Protection planning
+│   │   └── rule_evaluator.py       # Rule matching
 │   ├── protection/                 # Protection strategies
 │   │   ├── base_protection.py      # Strategy pattern
 │   │   ├── aes256_encryption.py    # AES-256-CBC
-│   │   ├── sha256_hashing.py       # SHA-256/512
+│   │   ├── sha256_hashing.py       # SHA-256
 │   │   ├── masking.py              # Masking strategies
 │   │   └── tokenization.py         # Token generation
 │   ├── validation/                 # Schema validation
 │   │   └── schema_validator.py     # Schema preservation
-│   ├── pipeline/                   # Pipeline orchestration
-│   │   └── pipeline_orchestrator.py # 7-stage pipeline
-│   └── audit/                      # Audit trail
-│       ├── cloudwatch_logger.py    # Metrics and logs
-│       └── dynamodb_writer.py      # Audit records
+│   └── pipeline/                   # Pipeline orchestration
+│       └── pipeline_orchestrator.py # 7-stage pipeline
+├── ui/                             # Streamlit demo UI
+│   ├── __init__.py                 # Package marker
+│   ├── app.py                      # Streamlit entry point
+│   ├── aws_client.py               # AWS access for the UI
+│   └── components.py               # Render helpers
 ├── policies/                       # YAML policies
 │   └── protection_policy.yaml
 ├── infrastructure/                 # CloudFormation/SAM
@@ -87,22 +88,24 @@ serverless-data-protection/
 │   ├── unit/                       # Unit tests
 │   ├── integration/                # Integration tests
 │   ├── security/                   # Security tests
-│   ├── performance/                # Performance tests
-│   └── test_data/                  # Test data generator
+│   └── performance/                # Performance tests
+├── test_data/                      # Synthetic test data generator
+│   └── generate_test_data.py
 ├── scripts/                        # Utility scripts
 │   └── run_tests.py
 ├── docs/                           # Documentation
-│   ├── API.md
 │   ├── CONFIGURATION.md
 │   └── DEPLOYMENT.md
-└── requirements.txt
+├── requirements.txt
+├── requirements-dev.txt
+└── requirements-ui.txt
 ```
 
 ## Quick Start
 
 ### Prerequisites
 
-- Python 3.11+
+- Python 3.13
 - AWS Account with CLI configured
 - AWS SAM CLI
 
@@ -118,7 +121,7 @@ python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 
 # Install dependencies
-pip install -r requirements.txt
+pip install -r requirements.txt -r requirements-dev.txt
 ```
 
 ### Local Testing
@@ -144,6 +147,22 @@ sam deploy --guided
 
 See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for detailed instructions.
 
+## Local Demo
+
+A Streamlit UI is available for end-to-end demos against a deployed stack.
+
+```bash
+export AWS_REGION=us-east-1
+export RAW_BUCKET_NAME=sdp-raw-data-dev-<account-id>
+export SECURE_BUCKET_NAME=sdp-secure-data-dev-<account-id>
+export AUDIT_TABLE_NAME=sdp-audit-dev
+
+pip install -r requirements.txt -r requirements-ui.txt
+streamlit run ui/app.py
+```
+
+AWS credentials must be configured via the standard boto3 credential chain.
+
 ## Configuration
 
 Protection policies are defined in YAML:
@@ -151,7 +170,7 @@ Protection policies are defined in YAML:
 ```yaml
 version: "1.0"
 settings:
-  detection_threshold: 0.5
+  confidence_threshold: 0.7
   default_protection: masking
 
 rules:
@@ -192,6 +211,8 @@ See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for full options.
 | `UK_NINO`            | National Insurance numbers   |
 | `UK_POSTCODE`        | UK postal codes              |
 | `UK_PHONE`           | UK phone formats             |
+| `UK_NAME`            | Common UK first/last names   |
+| `UK_CITY`            | Major UK cities and towns    |
 | `UK_DRIVERS_LICENSE` | Driving licence numbers      |
 | `UK_PASSPORT`        | UK passport numbers          |
 | `UK_BANK_ACCOUNT`    | UK bank accounts             |
@@ -199,12 +220,13 @@ See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for full options.
 
 ## Protection Methods
 
-| Method           | Type       | Description                     |
-|------------------|------------|---------------------------------|
-| `aes256_encrypt` | Reversible | AES-256-CBC encryption with KMS |
-| `sha256_hash`    | One-way    | SHA-256 cryptographic hash      |
-| `masking`        | One-way    | Partial character masking       |
-| `tokenization`   | Reversible | Surrogate value replacement     |
+| Method           | Type       | Description                             |
+|------------------|------------|-----------------------------------------|
+| `aes256_encrypt` | Reversible | AES-256-CBC encryption (optional KMS)   |
+| `sha256_hash`    | One-way    | SHA-256 cryptographic hash              |
+| `masking`        | One-way    | Partial character masking               |
+| `tokenization`   | Reversible | Surrogate value replacement             |
+| `redact`         | One-way    | Replaces value with `[REDACTED]` marker |
 
 ## Design Patterns
 
@@ -214,11 +236,7 @@ See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for full options.
 - **Template Method**: Base handler structure
 - **Pipeline**: Data transformation stages
 
-## API Reference
-
-See [docs/API.md](docs/API.md) for detailed API documentation.
-
-### Quick Example
+## Quick Example
 
 ```python
 from src.pipeline.pipeline_orchestrator import create_pipeline
@@ -228,7 +246,7 @@ pipeline = create_pipeline()
 
 # Process file
 result = pipeline.process(
-    data=file_bytes,
+    content=file_bytes,
     file_name="data.csv"
 )
 
@@ -259,24 +277,24 @@ python scripts/run_tests.py coverage
 
 ## Performance
 
-Tested performance targets:
-
-- 1KB file: <5 seconds
-- 10KB file: <10 seconds
-- 100KB file: <30 seconds
-- 1MB file: <60 seconds
+The deployed Lambda is provisioned at `MemorySize: 3008` MB and `Timeout:
+300` s. Cold-start dominates the first invocation (~60–70 s, almost entirely
+the spaCy `en_core_web_lg` model load); warm invocations process files up
+to roughly 1 MB in 3–10 s. The `LatencyAlarm` fires when the rolling
+5-minute average duration exceeds 120 s.
 
 ## Security Considerations
 
-- Encryption keys managed by AWS KMS
+- AWS KMS key provisioned with rotation enabled (opt-in for AES envelope encryption)
 - No PII stored in logs (only metadata)
-- DynamoDB audit records with TTL
+- DynamoDB audit records with TTL; raw entity texts stripped before write
 - S3 bucket encryption enabled
-- IAM least privilege access
+- IAM policies scoped to specific stack resources
 
 ## License
 
-This project is part of an MSc dissertation at the University of Plymouth.
+This project is part of an MSc dissertation at the University of Westminster, in collaboration with the Informatics
+Institute of Technology.
 
 ## Acknowledgements
 

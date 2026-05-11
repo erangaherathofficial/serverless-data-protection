@@ -2,9 +2,10 @@
 
 import io
 import json
-
 import pandas as pd
 import pytest
+
+from src.detection.presidio_detector import PresidioDetector
 from src.handlers.handler_factory import get_handler
 from src.pipeline.pipeline_orchestrator import (
     PipelineOrchestrator,
@@ -97,7 +98,6 @@ class TestPipelineIntegration:
     @pytest.fixture
     def pipeline(self, test_policy) -> PipelineOrchestrator:
         """Create pipeline with test policy."""
-        from src.detection.presidio_detector import PresidioDetector
         detector = PresidioDetector(score_threshold=0.5)
         return PipelineOrchestrator(policy=test_policy, detector=detector)
 
@@ -173,9 +173,12 @@ class TestPipelineIntegration:
         original_handler.validate(sample_csv_with_pii, 'test.csv')
         original_df = original_handler.parse(sample_csv_with_pii)
 
-        for col in ['email']:
-            if col in protected_df.columns:
-                assert not protected_df[col].equals(original_df[col])
+        assert 'email' in protected_df.columns
+        differing = sum(
+            1 for o, p in zip(original_df['email'], protected_df['email'])
+            if str(o) != str(p)
+        )
+        assert differing > 0, "no email cells were transformed"
 
     @pytest.mark.integration
     def test_pipeline_preserves_schema(self, pipeline, sample_csv_with_pii):
@@ -227,46 +230,23 @@ class TestPipelineIntegration:
         assert result.success is False
 
     @pytest.mark.integration
-    def test_pipeline_result_serialization(
+    def test_pipeline_emits_seven_stage_results(
             self, pipeline, sample_csv_with_pii
     ):
-        """Test pipeline result can be serialized."""
+        """Successful runs report a result for every pipeline stage."""
         result = pipeline.process(sample_csv_with_pii, 'test.csv')
 
-        result_dict = result.to_dict()
-
-        assert 'success' in result_dict
-        assert 'stages' in result_dict
-        assert 'total_duration_ms' in result_dict
-
-        json_str = json.dumps(result_dict)
-        assert len(json_str) > 0
-
-
-class TestPipelineHooks:
-    """Tests for pipeline hooks."""
-
-    @pytest.fixture
-    def pipeline(self) -> PipelineOrchestrator:
-        """Create pipeline."""
-        return create_pipeline()
-
-    @pytest.mark.integration
-    def test_register_hook(self, pipeline):
-        """Test registering pipeline hooks."""
-        hook_calls = []
-
-        def test_hook(stage, timing, *args):
-            hook_calls.append((stage, timing))
-
-        pipeline.register_hook(PipelineStage.DETECT, test_hook)
-
-        content = b'id,email\n1,test@test.com'
-        pipeline.process(content, 'test.csv')
-
-        assert len(hook_calls) >= 2
-        stages = [call[0] for call in hook_calls]
-        assert PipelineStage.DETECT in stages
+        stages = [sr.stage for sr in result.stage_results]
+        assert stages == [
+            PipelineStage.RECEIVE,
+            PipelineStage.VALIDATE,
+            PipelineStage.DETECT,
+            PipelineStage.EVALUATE,
+            PipelineStage.PROTECT,
+            PipelineStage.SCHEMA_CHECK,
+            PipelineStage.OUTPUT,
+        ]
+        assert result.total_duration_ms > 0
 
 
 class TestPipelineWithDifferentPolicies:
@@ -299,13 +279,12 @@ class TestPipelineWithDifferentPolicies:
         assert result.success is True
 
         handler = get_handler('test.csv')
-        handler.validate(result.protected_data, 'test.csv')
-        df = handler.parse(result.protected_data)
+        df = handler.process(result.protected_data, 'test.csv').dataframe
 
-        for email in df['email']:
-            if 'HASH:' in str(email):
-                assert True
-                return
+        emails = [str(v) for v in df['email']]
+        assert all('john@example.com' not in v and 'jane@test.org' not in v
+                   for v in emails)
+        assert any(v.startswith('HASH:') for v in emails)
 
     @pytest.mark.integration
     def test_mask_only_policy(self, csv_content):
@@ -328,11 +307,13 @@ class TestPipelineWithDifferentPolicies:
 
         assert result.success is True
 
+        handler = get_handler('test.csv')
+        df = handler.process(result.protected_data, 'test.csv').dataframe
+        assert any('*' in str(v) or 'X' in str(v) for v in df['email'])
+
     @pytest.mark.integration
     def test_high_threshold_detects_less(self, csv_content):
         """Test higher threshold results in fewer detections."""
-        from src.detection.presidio_detector import PresidioDetector
-
         low_detector = PresidioDetector(score_threshold=0.3)
         high_detector = PresidioDetector(score_threshold=0.9)
 
@@ -356,6 +337,7 @@ class TestPipelineWithDifferentPolicies:
         low_entities = len(low_result.detection_summary.get('entities', []))
         high_entities = len(high_result.detection_summary.get('entities', []))
 
+        assert low_entities > 0
         assert low_entities >= high_entities
 
 
@@ -386,9 +368,9 @@ class TestPipelineErrorHandling:
         assert result.success is False
 
     @pytest.mark.integration
-    def test_fail_fast_mode(self):
-        """Test fail-fast stops at first error."""
-        pipeline = PipelineOrchestrator(fail_fast=True)
+    def test_pipeline_stops_at_first_error(self):
+        """Pipeline returns at the first failing stage with a single result."""
+        pipeline = PipelineOrchestrator()
 
         result = pipeline.process(b'', 'empty.csv')
 

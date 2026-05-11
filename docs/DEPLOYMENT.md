@@ -7,84 +7,59 @@ This guide covers deploying the serverless data protection framework to AWS.
 1. **AWS Account** with appropriate permissions
 2. **AWS CLI** installed and configured
 3. **AWS SAM CLI** installed
-4. **Python 3.11+** installed
-5. **Docker** (optional, for local testing)
+4. **Python 3.13**
+5. **Docker** installed and running (the Lambda is packaged as a container image)
 
 ## AWS Permissions Required
 
 The deployment user/role needs these permissions:
 
 - CloudFormation full access
-- S3 full access (or scoped to deployment bucket)
+- S3 full access (or scoped to the SAM-managed deployment bucket)
 - Lambda full access
 - DynamoDB full access
 - KMS full access
 - CloudWatch Logs full access
 - IAM role creation
+- ECR access (SAM pushes the Lambda image to a managed ECR repo)
 
 ## Step-by-Step Deployment
 
 ### 1. Clone and Setup
 
 ```bash
-# Clone the repository
 git clone <repository-url>
 cd serverless-data-protection
 
-# Create virtual environment
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 
-# Install dependencies
-pip install -r requirements.txt
+pip install -r requirements.txt -r requirements-dev.txt
 ```
 
 ### 2. Configure AWS CLI
 
 ```bash
-# Configure credentials
 aws configure
-
-# Verify configuration
 aws sts get-caller-identity
 ```
 
-### 3. Create S3 Buckets
-
-```bash
-# Create deployment artifact bucket
-aws s3 mb s3://your-deployment-bucket-name
-
-# Create source data bucket
-aws s3 mb s3://your-source-data-bucket
-
-# Create secure output bucket
-aws s3 mb s3://your-secure-output-bucket
-
-# Create policy bucket
-aws s3 mb s3://your-policy-bucket
-```
-
-### 4. Upload Policy File
-
-```bash
-# Upload protection policy
-aws s3 cp policies/protection_policy.yaml s3://your-policy-bucket/policies/
-```
-
-### 5. Build the Application
+### 3. Build the Application
 
 ```bash
 cd infrastructure
 
-# Build with SAM
 sam build
-
-# Validate template
 sam validate
 ```
 
-### 6. Deploy
+`sam build` reads `template.yaml`, builds the Lambda container image from the
+project root using `Dockerfile`, and produces a deployment artefact under
+`.aws-sam/build/`. The S3 buckets, DynamoDB table, KMS key, IAM role, and
+CloudWatch dashboard are all created by the template — you do not need to
+provision them yourself.
+
+### 4. Deploy
 
 **Option A: Guided deployment (first time)**
 
@@ -92,213 +67,185 @@ sam validate
 sam deploy --guided
 ```
 
-Follow the prompts:
+Suggested prompt answers:
 
-- Stack Name: `data-protection-stack`
-- AWS Region: `eu-west-2` (or your preferred region)
-- SourceBucketName: `your-source-data-bucket`
-- SecureBucketName: `your-secure-output-bucket`
-- PolicyBucketName: `your-policy-bucket`
-- Environment: `dev`
-- Confirm changes: `Y`
+- Stack Name: `serverless-data-protection-dev`
+- AWS Region: `us-east-1` (or your preferred region)
+- Parameter `Environment`: `dev`
+- Parameter `LogRetentionDays`: `30`
+- Confirm changes before deploy: `Y`
 - Allow SAM CLI IAM role creation: `Y`
+- Disable rollback: `N`
+- Save arguments to configuration file: `Y` (writes `samconfig.toml`)
 
 **Option B: Non-interactive deployment**
 
 ```bash
 sam deploy \
-  --stack-name data-protection-stack \
-  --capabilities CAPABILITY_IAM \
+  --stack-name serverless-data-protection-dev \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --resolve-image-repos \
   --parameter-overrides \
-    SourceBucketName=your-source-data-bucket \
-    SecureBucketName=your-secure-output-bucket \
-    PolicyBucketName=your-policy-bucket \
-    Environment=dev
+    Environment=dev \
+    LogRetentionDays=30
 ```
 
-### 7. Verify Deployment
+The first deployment also creates an ECR repo for the Lambda image; subsequent
+deployments reuse it.
+
+### 5. Verify Deployment
 
 ```bash
-# Check stack status
 aws cloudformation describe-stacks \
-  --stack-name data-protection-stack \
+  --stack-name serverless-data-protection-dev \
   --query 'Stacks[0].StackStatus'
 
-# List Lambda functions
-aws lambda list-functions \
-  --query 'Functions[?starts_with(FunctionName, `DataProtection`)]'
+aws lambda get-function \
+  --function-name sdp-data-protection-dev \
+  --query 'Configuration.[State,LastUpdateStatus]'
 
-# Check DynamoDB table
 aws dynamodb describe-table \
-  --table-name DataProtection-Audit-dev
+  --table-name sdp-audit-dev \
+  --query 'Table.TableStatus'
+
+aws s3 ls | grep sdp-
 ```
+
+The stack outputs (`RawDataBucketName`, `SecureDataBucketName`,
+`AuditTableName`, `EncryptionKeyArn`, `DataProtectionFunctionArn`,
+`DashboardUrl`) are also available via `aws cloudformation describe-stacks`.
 
 ## Testing the Deployment
 
-### Upload Test File
+### Upload a Test File
 
 ```bash
-# Create a test CSV file
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+RAW_BUCKET="sdp-raw-data-dev-${ACCOUNT_ID}"
+
 cat > test.csv << 'EOF'
 id,name,email,phone
 1,John Smith,john@example.com,+44 7911 123456
 2,Jane Doe,jane@company.co.uk,020 7946 0958
 EOF
 
-# Upload to source bucket
-aws s3 cp test.csv s3://your-source-data-bucket/incoming/
+aws s3 cp test.csv "s3://${RAW_BUCKET}/incoming/test.csv"
 ```
 
 ### Check Processing Results
 
 ```bash
-# Wait a few seconds for processing
+SECURE_BUCKET="sdp-secure-data-dev-${ACCOUNT_ID}"
 
-# Check secure bucket for output
-aws s3 ls s3://your-secure-output-bucket/protected/
+aws s3 ls "s3://${SECURE_BUCKET}/protected/incoming/"
 
-# View Lambda logs
-aws logs tail /aws/lambda/DataProtection-DataProtectionFunction-dev \
-  --follow
+aws logs tail /aws/lambda/sdp-data-protection-dev --follow
 ```
 
 ### Query Audit Records
 
 ```bash
-# Query DynamoDB for processing records
 aws dynamodb query \
-  --table-name DataProtection-Audit-dev \
+  --table-name sdp-audit-dev \
   --key-condition-expression "pk = :pk" \
-  --expression-attribute-values '{":pk": {"S": "FILE#your-source-data-bucket/incoming/test.csv"}}'
+  --expression-attribute-values \
+    "{\":pk\": {\"S\": \"FILE#${RAW_BUCKET}/incoming/test.csv\"}}"
 ```
 
 ## Environment-Specific Deployments
 
-### Development
-
 ```bash
-sam deploy \
-  --stack-name data-protection-dev \
-  --parameter-overrides Environment=dev LambdaMemorySize=512
-```
+# Staging
+sam deploy --stack-name serverless-data-protection-staging \
+  --parameter-overrides Environment=staging LogRetentionDays=60
 
-### Staging
-
-```bash
-sam deploy \
-  --stack-name data-protection-staging \
-  --parameter-overrides Environment=staging LambdaMemorySize=1024
-```
-
-### Production
-
-```bash
-sam deploy \
-  --stack-name data-protection-prod \
-  --parameter-overrides \
-    Environment=prod \
-    LambdaMemorySize=2048 \
-    LambdaTimeout=300
+# Production
+sam deploy --stack-name serverless-data-protection-prod \
+  --parameter-overrides Environment=prod LogRetentionDays=90
 ```
 
 ## Updating the Deployment
 
 ```bash
-# Make code changes, then:
 sam build
 sam deploy
 ```
 
-## Rolling Back
-
-```bash
-# Rollback to previous version
-aws cloudformation rollback-stack \
-  --stack-name data-protection-stack
-```
+When changing the policy YAML in `policies/`, redeploy — the policy is
+baked into the Lambda image at build time.
 
 ## Cleanup
 
 ```bash
-# Empty S3 buckets first
-aws s3 rm s3://your-source-data-bucket --recursive
-aws s3 rm s3://your-secure-output-bucket --recursive
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+aws s3 rm "s3://sdp-raw-data-dev-${ACCOUNT_ID}" --recursive
+aws s3 rm "s3://sdp-secure-data-dev-${ACCOUNT_ID}" --recursive
 
-# Delete the stack
-aws cloudformation delete-stack \
-  --stack-name data-protection-stack
-
-# Wait for deletion
-aws cloudformation wait stack-delete-complete \
-  --stack-name data-protection-stack
+sam delete --stack-name serverless-data-protection-dev
 ```
+
+`sam delete` removes the CloudFormation stack and prompts for confirmation
+before deleting the SAM-managed deployment bucket and ECR repo.
 
 ## Troubleshooting
 
 ### Lambda Timeout
 
-If processing times out:
-
-1. Increase `LambdaTimeout` parameter
-2. Increase `LambdaMemorySize` for more CPU
-3. Check file size limits in policy
+If processing exceeds the 300-second timeout, increase `Timeout` in
+`infrastructure/template.yaml` under `Globals.Function`, or split very
+large input files before upload.
 
 ### Permission Errors
 
-If Lambda can't access S3/DynamoDB:
+If the Lambda cannot access S3, DynamoDB, or KMS:
 
-1. Check IAM role has required permissions
-2. Verify bucket names in environment variables
-3. Check KMS key permissions for encryption
+1. Confirm the stack created `LambdaExecutionRole` and that the IAM policies
+   in `template.yaml` reference the correct resource ARNs.
+2. Check the Lambda's environment variables (`RAW_BUCKET_NAME`,
+   `SECURE_BUCKET_NAME`, `AUDIT_TABLE_NAME`, `KMS_KEY_ID`) match the stack
+   resources.
 
 ### Detection Issues
 
-If PII not detected:
+If PII is not being detected:
 
-1. Check `DETECTION_THRESHOLD` setting
-2. Verify file format is supported
-3. Review CloudWatch logs for errors
+1. Lower `settings.confidence_threshold` in `policies/protection_policy.yaml`
+   and redeploy.
+2. Verify the file extension is `.csv`, `.json`, `.ndjson`, or `.parquet` —
+   other suffixes are filtered out by the EventBridge rule.
+3. Inspect `/aws/lambda/sdp-data-protection-dev` logs in CloudWatch.
 
 ### Memory Errors
 
-If Lambda runs out of memory:
-
-1. Increase `LambdaMemorySize`
-2. Process smaller files
-3. Enable chunked processing (future feature)
+If the Lambda runs out of memory, increase `MemorySize` in
+`Globals.Function` (the template ships with `3008` MB) and redeploy.
 
 ## Monitoring
 
 ### CloudWatch Dashboard
 
-The deployment creates a CloudWatch dashboard at:
-`https://console.aws.amazon.com/cloudwatch/home?region=YOUR_REGION#dashboards:name=DataProtection-Dashboard`
+The template provisions a dashboard named `sdp-monitoring-${Environment}`
+charting Lambda `Invocations`, `Errors`, `Duration`, and
+`ConcurrentExecutions`. The full URL is exported as the `DashboardUrl`
+stack output.
 
 ### Alarms
 
-Set up alarms for:
-
-- Error rate > 5%
-- Processing duration > 60 seconds
-- Memory utilization > 80%
-
-```bash
-aws cloudwatch put-metric-alarm \
-  --alarm-name DataProtection-Errors \
-  --metric-name ProcessingErrors \
-  --namespace DataProtection \
-  --statistic Sum \
-  --period 300 \
-  --threshold 5 \
-  --comparison-operator GreaterThanThreshold \
-  --evaluation-periods 1
-```
+The template creates four alarms keyed off AWS/Lambda metrics: error rate
+(>5 errors per 5 min), duration (>120 s average per 5 min), throttles
+(any), and high invocation count (>1000 per hour). Tune the thresholds in
+`template.yaml` if your workload differs.
 
 ## Security Considerations
 
-1. **Encryption at Rest**: Enable S3 bucket encryption
-2. **Encryption in Transit**: Use HTTPS endpoints only
-3. **KMS Key Rotation**: Enable automatic key rotation
-4. **VPC**: Consider deploying Lambda in VPC for network isolation
-5. **Least Privilege**: Review and minimize IAM permissions
-6. **Audit Logs**: Enable CloudTrail for API auditing
+1. **Encryption at Rest**: S3 buckets and DynamoDB use AES-256 SSE
+   (configured by the template).
+2. **Encryption in Transit**: All AWS service calls use HTTPS endpoints.
+3. **KMS Key Rotation**: The framework's KMS key has automatic rotation
+   enabled.
+4. **VPC**: Consider deploying the Lambda inside a VPC for network
+   isolation if your data is sensitive.
+5. **Least Privilege**: Review the IAM policies in `LambdaExecutionRole`
+   before promoting to production.
+6. **Audit Logs**: Enable CloudTrail for cross-service API auditing in
+   addition to the per-file DynamoDB audit table.

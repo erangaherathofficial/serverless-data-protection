@@ -1,9 +1,9 @@
 """JSON file handler implementation."""
 
 import json
+import pandas as pd
 from typing import Any, Optional
 
-import pandas as pd
 from src.handlers.base_handler import BaseHandler
 
 
@@ -15,8 +15,6 @@ class JSONHandler(BaseHandler):
     - Object with records array: {"records": [{"a": 1}]}
     - Newline-delimited JSON (NDJSON): {"a": 1}\n{"a": 2}
     """
-
-    SUPPORTED_EXTENSIONS = ['.json']
 
     def __init__(self, encoding: str = 'utf-8',
                  records_path: Optional[str] = None) -> None:

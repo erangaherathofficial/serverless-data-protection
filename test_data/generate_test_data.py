@@ -5,11 +5,10 @@ and Parquet formats.
 """
 
 import io
+import pandas as pd
 import random
 from pathlib import Path
 from typing import Any
-
-import pandas as pd
 
 import json
 
@@ -30,14 +29,6 @@ class SyntheticDataGenerator:
         'SW1A 1AA', 'EC1A 1BB', 'W1A 0AX', 'M1 1AE', 'B1 1AA',
         'G1 1AA', 'EH1 1AA', 'CF10 1AA', 'BT1 1AA', 'LS1 1AA',
         'NE1 1AA', 'S1 1AA', 'NG1 1AA', 'L1 1AA', 'BS1 1AA'
-    ]
-
-    UK_PHONE_FORMATS = [
-        '+44 7{:03d} {:06d}',
-        '07{:03d} {:06d}',
-        '+44 20 {:04d} {:04d}',
-        '020 {:04d} {:04d}',
-        '0{:04d} {:06d}'
     ]
 
     DOMAINS = [
@@ -67,31 +58,64 @@ class SyntheticDataGenerator:
         return f"{random.choice(patterns)}@{random.choice(self.DOMAINS)}"
 
     def _generate_phone(self) -> str:
-        """Generate UK phone number."""
-        fmt = random.choice(self.UK_PHONE_FORMATS)
-        return fmt.format(
-            random.randint(100, 999),
-            random.randint(100000, 999999)
-        )
+        """Generate UK phone number using format-aware value ranges.
+
+        Each template's placeholder width determines its numeric range so the
+        result matches a real UK numbering plan (no spurious leading zeros).
+        """
+        templates = [
+            ('+44 7{:03d} {:06d}', 100, 999, 100000, 999999),
+            ('07{:03d} {:06d}', 100, 999, 100000, 999999),
+            ('+44 20 {:04d} {:04d}', 1000, 9999, 1000, 9999),
+            ('020 {:04d} {:04d}', 1000, 9999, 1000, 9999),
+            ('0{:04d} {:06d}', 1000, 9999, 100000, 999999),
+        ]
+        fmt, a_lo, a_hi, b_lo, b_hi = random.choice(templates)
+        return fmt.format(random.randint(a_lo, a_hi), random.randint(b_lo, b_hi))
 
     def _generate_nino(self) -> str:
-        """Generate UK National Insurance Number."""
-        prefixes = ['AB', 'CD', 'EF', 'GH', 'JK', 'LM', 'NP', 'RS']
+        """Generate UK National Insurance Number with HMRC-valid prefix.
+
+        Per HMRC, neither letter may be D/F/I/O/Q/U/V; the recognizer
+        rejects values that violate this, so the generator must respect it.
+        """
+        prefixes = ['AB', 'CB', 'CC', 'GH', 'HJ', 'JK', 'LM', 'NP', 'PR', 'RS']
         prefix = random.choice(prefixes)
         numbers = ''.join([str(random.randint(0, 9)) for _ in range(6)])
         suffix = random.choice(['A', 'B', 'C', 'D'])
         return f"{prefix}{numbers}{suffix}"
 
     def _generate_nhs_number(self) -> str:
-        """Generate NHS number (10 digits)."""
-        return ''.join([str(random.randint(0, 9)) for _ in range(10)])
+        """Generate NHS number with valid Mod-11 check digit."""
+        weights = [10, 9, 8, 7, 6, 5, 4, 3, 2]
+        while True:
+            digits = [random.randint(0, 9) for _ in range(9)]
+            remainder = sum(d * w for d, w in zip(digits, weights)) % 11
+            check = 11 - remainder
+            if check == 11:
+                check = 0
+            if check == 10:
+                continue
+            return ''.join(str(d) for d in digits) + str(check)
 
     def _generate_credit_card(self) -> str:
-        """Generate test credit card number (Luhn-invalid for safety)."""
-        prefixes = ['4111', '5500', '3782', '6011']
+        """Generate Luhn-valid 16-digit synthetic card.
+
+        Presidio CREDIT_CARD validates the Luhn check digit, so the
+        generator must produce numbers that pass it.
+        """
+        prefixes = ['4111', '5500', '6011']
         prefix = random.choice(prefixes)
-        remaining = ''.join([str(random.randint(0, 9)) for _ in range(12)])
-        return f"{prefix}{remaining}"
+        body = [int(d) for d in prefix] + [random.randint(0, 9) for _ in range(11)]
+        total = 0
+        for i, d in enumerate(reversed(body)):
+            if i % 2 == 0:
+                d *= 2
+                if d > 9:
+                    d -= 9
+            total += d
+        check = (10 - total % 10) % 10
+        return ''.join(str(d) for d in body) + str(check)
 
     def _generate_address(self) -> str:
         """Generate UK address."""

@@ -1,13 +1,9 @@
 """Schema validation for data protection pipeline."""
 
-import logging
+import pandas as pd
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
-
-import pandas as pd
-
-logger = logging.getLogger(__name__)
 
 
 class ValidationSeverity(Enum):
@@ -26,15 +22,6 @@ class ValidationIssue:
     column: Optional[str] = None
     details: Optional[dict] = None
 
-    def to_dict(self) -> dict:
-        """Convert to dictionary."""
-        return {
-            'message': self.message,
-            'severity': self.severity.value,
-            'column': self.column,
-            'details': self.details
-        }
-
 
 @dataclass
 class SchemaInfo:
@@ -44,38 +31,16 @@ class SchemaInfo:
     dtypes: dict[str, str]
     nullable: dict[str, bool]
     row_count: int
-    metadata: dict = field(default_factory=dict)
 
     @classmethod
     def from_dataframe(cls, df: pd.DataFrame) -> 'SchemaInfo':
-        """Extract schema from DataFrame.
-
-        Args:
-            df: Source DataFrame
-
-        Returns:
-            SchemaInfo object
-        """
-        nullable = {}
-        for col in df.columns:
-            nullable[col] = df[col].isna().any()
-
+        """Extract schema from a DataFrame."""
         return cls(
             columns=list(df.columns),
             dtypes={col: str(dtype) for col, dtype in df.dtypes.items()},
-            nullable=nullable,
-            row_count=len(df)
+            nullable={col: bool(df[col].isna().any()) for col in df.columns},
+            row_count=len(df),
         )
-
-    def to_dict(self) -> dict:
-        """Convert to dictionary."""
-        return {
-            'columns': self.columns,
-            'dtypes': self.dtypes,
-            'nullable': self.nullable,
-            'row_count': self.row_count,
-            'metadata': self.metadata
-        }
 
 
 @dataclass
@@ -139,23 +104,6 @@ class ValidationResult:
             if i.severity == ValidationSeverity.WARNING
         ]
 
-    def to_dict(self) -> dict:
-        """Convert to dictionary."""
-        return {
-            'is_valid': self.is_valid,
-            'error_count': len(self.errors),
-            'warning_count': len(self.warnings),
-            'issues': [i.to_dict() for i in self.issues],
-            'original_schema': (
-                self.original_schema.to_dict()
-                if self.original_schema else None
-            ),
-            'protected_schema': (
-                self.protected_schema.to_dict()
-                if self.protected_schema else None
-            )
-        }
-
 
 class SchemaValidator:
     """Validates schema preservation after data protection.
@@ -177,10 +125,18 @@ class SchemaValidator:
         """Initialize validator.
 
         Args:
-            strict_types: Require exact type matches
-            allow_type_widening: Allow string conversion (post-protection)
-            validate_row_count: Check row counts match
+            strict_types: Require exact type matches.
+            allow_type_widening: Allow string conversion (post-protection).
+                Mutually exclusive with `strict_types`; both off would silently
+                ignore every dtype change, both on would render widening dead.
+            validate_row_count: Check row counts match.
         """
+        if strict_types == allow_type_widening:
+            raise ValueError(
+                "Exactly one of strict_types and allow_type_widening must be "
+                "True; got strict_types=allow_type_widening="
+                f"{strict_types}."
+            )
         self._strict_types = strict_types
         self._allow_type_widening = allow_type_widening
         self._validate_row_count = validate_row_count
@@ -287,42 +243,30 @@ class SchemaValidator:
             if orig_dtype == prot_dtype:
                 continue
 
+            details = {
+                'original_type': orig_dtype,
+                'protected_type': prot_dtype,
+            }
+
             if self._strict_types:
                 result.add_error(
                     f"Type mismatch for '{col}': {orig_dtype} -> {prot_dtype}",
                     column=col,
-                    details={
-                        'original_type': orig_dtype,
-                        'protected_type': prot_dtype
-                    }
+                    details=details,
                 )
-            elif self._allow_type_widening:
-                if self._is_valid_type_conversion(orig_dtype, prot_dtype):
-                    msg = (
-                        f"Type widened for '{col}': "
-                        f"{orig_dtype} -> {prot_dtype}"
-                    )
-                    result.add_info(
-                        msg,
-                        column=col,
-                        details={
-                            'original_type': orig_dtype,
-                            'protected_type': prot_dtype
-                        }
-                    )
-                else:
-                    msg = (
-                        f"Unexpected type change for '{col}': "
-                        f"{orig_dtype} -> {prot_dtype}"
-                    )
-                    result.add_warning(
-                        msg,
-                        column=col,
-                        details={
-                            'original_type': orig_dtype,
-                            'protected_type': prot_dtype
-                        }
-                    )
+            elif self._is_valid_type_conversion(orig_dtype, prot_dtype):
+                result.add_info(
+                    f"Type widened for '{col}': {orig_dtype} -> {prot_dtype}",
+                    column=col,
+                    details=details,
+                )
+            else:
+                result.add_warning(
+                    f"Unexpected type change for '{col}': "
+                    f"{orig_dtype} -> {prot_dtype}",
+                    column=col,
+                    details=details,
+                )
 
     def _validate_rows(
             self,
@@ -368,172 +312,31 @@ class SchemaValidator:
                     }
                 )
 
+    _STRING_DTYPES = {'object', 'string'}
+    _NUMERIC_DTYPES = {
+        'int8', 'int16', 'int32', 'int64',
+        'uint8', 'uint16', 'uint32', 'uint64',
+        'Int8', 'Int16', 'Int32', 'Int64',
+        'UInt8', 'UInt16', 'UInt32', 'UInt64',
+        'float16', 'float32', 'float64',
+        'Float32', 'Float64',
+    }
+    _BOOL_DTYPES = {'bool', 'boolean'}
+
     def _is_valid_type_conversion(self, from_type: str, to_type: str) -> bool:
-        """Check if type conversion is acceptable.
+        """Check if a dtype change is an acceptable widening.
 
-        Common after protection: numeric/date -> string
+        Accepted: non-bool ``→`` string-family (the canonical PII-redaction
+        case), or numeric ``→`` numeric within the int/float family. The
+        ``pd.StringDtype`` ``string[pyarrow]`` representation is handled by
+        prefix match. Boolean ``→`` string is rejected as it usually
+        indicates an unintended conversion rather than deliberate widening.
         """
-        string_types = {'object', 'string', 'str'}
-
-        if to_type in string_types:
+        is_string_target = (
+                to_type in self._STRING_DTYPES or to_type.startswith('string[')
+        )
+        if is_string_target and from_type not in self._BOOL_DTYPES:
             return True
-
-        numeric_types = {'int64', 'int32', 'float64', 'float32'}
-        if from_type in numeric_types and to_type in numeric_types:
+        if from_type in self._NUMERIC_DTYPES and to_type in self._NUMERIC_DTYPES:
             return True
-
         return False
-
-
-class SchemaEnforcer:
-    """Enforces schema constraints on protected data."""
-
-    def __init__(self, original_schema: SchemaInfo) -> None:
-        """Initialize enforcer with original schema.
-
-        Args:
-            original_schema: Schema to enforce
-        """
-        self._schema = original_schema
-
-    def enforce(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Enforce schema on DataFrame.
-
-        Args:
-            df: DataFrame to enforce schema on
-
-        Returns:
-            DataFrame with enforced schema
-        """
-        result = df.copy()
-
-        result = self._enforce_columns(result)
-        result = self._enforce_order(result)
-
-        return result
-
-    def _enforce_columns(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Ensure all original columns exist."""
-        for col in self._schema.columns:
-            if col not in df.columns:
-                df[col] = None
-                logger.warning(f"Added missing column: {col}")
-
-        extra_cols = set(df.columns) - set(self._schema.columns)
-        if extra_cols:
-            df = df.drop(columns=list(extra_cols))
-            logger.warning(f"Removed extra columns: {extra_cols}")
-
-        return df
-
-    def _enforce_order(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Enforce column order."""
-        return df[self._schema.columns]
-
-
-class SchemaComparator:
-    """Compares schemas for differences."""
-
-    @staticmethod
-    def compare(
-            schema1: SchemaInfo,
-            schema2: SchemaInfo
-    ) -> dict:
-        """Compare two schemas and return differences.
-
-        Args:
-            schema1: First schema
-            schema2: Second schema
-
-        Returns:
-            Dictionary of differences
-        """
-        differences = {
-            'columns': {
-                'added': [],
-                'removed': [],
-                'common': []
-            },
-            'types': {},
-            'row_count': {
-                'schema1': schema1.row_count,
-                'schema2': schema2.row_count,
-                'match': schema1.row_count == schema2.row_count
-            }
-        }
-
-        cols1 = set(schema1.columns)
-        cols2 = set(schema2.columns)
-
-        differences['columns']['added'] = list(cols2 - cols1)
-        differences['columns']['removed'] = list(cols1 - cols2)
-        differences['columns']['common'] = list(cols1 & cols2)
-
-        for col in differences['columns']['common']:
-            type1 = schema1.dtypes.get(col)
-            type2 = schema2.dtypes.get(col)
-            if type1 != type2:
-                differences['types'][col] = {
-                    'from': type1,
-                    'to': type2
-                }
-
-        return differences
-
-    @staticmethod
-    def are_compatible(
-            schema1: SchemaInfo,
-            schema2: SchemaInfo,
-            strict: bool = False
-    ) -> bool:
-        """Check if two schemas are compatible.
-
-        Args:
-            schema1: First schema
-            schema2: Second schema
-            strict: Require exact match
-
-        Returns:
-            True if compatible
-        """
-        if set(schema1.columns) != set(schema2.columns):
-            return False
-
-        if strict:
-            if schema1.columns != schema2.columns:
-                return False
-            if schema1.dtypes != schema2.dtypes:
-                return False
-
-        return True
-
-
-def validate_schema(
-        original: pd.DataFrame,
-        protected: pd.DataFrame,
-        strict: bool = False
-) -> ValidationResult:
-    """Convenience function to validate schema preservation.
-
-    Args:
-        original: Original DataFrame
-        protected: Protected DataFrame
-        strict: Use strict type checking
-
-    Returns:
-        ValidationResult
-    """
-    validator = SchemaValidator(strict_types=strict)
-    return validator.validate(original, protected)
-
-
-def extract_schema(df: pd.DataFrame) -> SchemaInfo:
-    """Extract schema from DataFrame.
-
-    Args:
-        df: Source DataFrame
-
-    Returns:
-        SchemaInfo object
-    """
-    return SchemaInfo.from_dataframe(df)

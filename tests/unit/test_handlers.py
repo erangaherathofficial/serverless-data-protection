@@ -2,9 +2,9 @@
 
 import io
 import json
-
 import pandas as pd
 import pytest
+
 from src.handlers.base_handler import FileMetadata, ProcessedData
 from src.handlers.csv_handler import CSVHandler
 from src.handlers.handler_factory import (
@@ -87,17 +87,11 @@ class TestCSVHandler:
         handler = CSVHandler()
         assert handler.get_content_type() == 'text/csv'
 
-    def test_supports_extension(self):
-        """Test extension support check."""
-        assert CSVHandler.supports_extension('.csv') is True
-        assert CSVHandler.supports_extension('csv') is True
-        assert CSVHandler.supports_extension('.json') is False
-
 
 class TestJSONHandler:
     """Tests for JSON handler."""
 
-    def test_validate_array_json(self, sample_json_content):
+    def test_validate_array_json(self):
         """Test validation of JSON array format."""
         content = b'[{"a": 1}, {"a": 2}]'
         handler = JSONHandler()
@@ -249,16 +243,6 @@ class TestParquetHandler:
         assert isinstance(result, ProcessedData)
         assert result.metadata.file_format == 'Parquet'
 
-    def test_get_schema_info(self, sample_parquet_content):
-        """Test schema info extraction."""
-        handler = ParquetHandler()
-        handler.validate(sample_parquet_content, 'test.parquet')
-        handler.parse(sample_parquet_content)
-
-        schema_info = handler.get_schema_info()
-        assert 'columns' in schema_info
-        assert len(schema_info['columns']) == 3
-
     def test_content_type(self):
         """Test content type is correct."""
         handler = ParquetHandler()
@@ -290,17 +274,9 @@ class TestHandlerFactory:
 
     def test_get_handler_unsupported(self):
         """Test factory raises for unsupported format."""
-        with pytest.raises(UnsupportedFormatError) as exc:
+        with pytest.raises(UnsupportedFormatError, match='Unsupported file format') as exc:
             HandlerFactory.get_handler('file.txt')
         assert exc.value.extension == '.txt'
-
-    def test_get_handler_for_extension(self):
-        """Test get handler by extension."""
-        handler = HandlerFactory.get_handler_for_extension('csv')
-        assert isinstance(handler, CSVHandler)
-
-        handler = HandlerFactory.get_handler_for_extension('.json')
-        assert isinstance(handler, JSONHandler)
 
     def test_is_supported(self):
         """Test support checking."""
@@ -309,12 +285,12 @@ class TestHandlerFactory:
         assert HandlerFactory.is_supported('file.parquet') is True
         assert HandlerFactory.is_supported('file.txt') is False
 
-    def test_get_supported_extensions(self):
-        """Test listing supported extensions."""
-        extensions = HandlerFactory.get_supported_extensions()
-        assert '.csv' in extensions
-        assert '.json' in extensions
-        assert '.parquet' in extensions
+    def test_format_name(self):
+        """Test format-name extraction."""
+        assert HandlerFactory.format_name('a.csv') == 'CSV'
+        assert HandlerFactory.format_name('a.parquet') == 'PARQUET'
+        assert HandlerFactory.format_name('a.NDJSON') == 'NDJSON'
+        assert HandlerFactory.format_name('no_extension') == 'UNKNOWN'
 
     def test_convenience_function(self):
         """Test get_handler convenience function."""

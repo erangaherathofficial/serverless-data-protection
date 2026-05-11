@@ -1,10 +1,8 @@
 """Abstract base handler for file processing."""
 
+import pandas as pd
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Optional
-
-import pandas as pd
 
 
 @dataclass
@@ -26,7 +24,6 @@ class ProcessedData:
 
     dataframe: pd.DataFrame
     metadata: FileMetadata
-    raw_content: Optional[bytes] = None
 
 
 class BaseHandler(ABC):
@@ -35,8 +32,6 @@ class BaseHandler(ABC):
     Implements the Template Method pattern for file processing,
     with concrete implementations for CSV, JSON, and Parquet formats.
     """
-
-    SUPPORTED_EXTENSIONS: list[str] = []
 
     def __init__(self) -> None:
         self._validation_errors: list[str] = []
@@ -71,11 +66,7 @@ class BaseHandler(ABC):
         df = self.parse(content)
         metadata = self._extract_metadata(df, content, file_name)
 
-        return ProcessedData(
-            dataframe=df,
-            metadata=metadata,
-            raw_content=content
-        )
+        return ProcessedData(dataframe=df, metadata=metadata)
 
     @abstractmethod
     def validate(self, content: bytes, file_name: str) -> bool:
@@ -151,18 +142,3 @@ class BaseHandler(ABC):
     def _add_validation_error(self, error: str) -> None:
         """Add a validation error message."""
         self._validation_errors.append(error)
-
-    @classmethod
-    def supports_extension(cls, extension: str) -> bool:
-        """Check if handler supports given file extension.
-
-        Args:
-            extension: File extension (with or without dot)
-
-        Returns:
-            True if supported
-        """
-        ext = extension.lower()
-        if not ext.startswith('.'):
-            ext = f'.{ext}'
-        return ext in cls.SUPPORTED_EXTENSIONS

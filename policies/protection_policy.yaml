@@ -4,7 +4,6 @@ description: "Default protection policy for PII entities"
 settings:
   default_protection: masking
   confidence_threshold: 0.7
-  preserve_schema: true
 
 rules:
   - entity_type: EMAIL_ADDRESS
@@ -66,3 +65,66 @@ rules:
     protection_method: aes256_encrypt
     priority: 1
     description: "Encrypt IBAN codes"
+
+  - entity_type: UK_NINO
+    protection_method: sha256_hash
+    priority: 1
+    description: "Hash UK National Insurance numbers"
+
+  - entity_type: UK_POSTCODE
+    protection_method: masking
+    priority: 2
+    options:
+      mask_char: "*"
+      visible_chars: 3
+      direction: left
+    description: "Mask UK postcodes keeping outward area"
+
+  - entity_type: UK_CITY
+    protection_method: masking
+    priority: 2
+    options:
+      mask_char: "*"
+      visible_chars: 0
+    description: "Fully mask UK city names embedded in addresses"
+
+  - entity_type: UK_NAME
+    protection_method: masking
+    priority: 2
+    options:
+      mask_char: "X"
+      visible_chars: 1
+      direction: left
+    description: "Dictionary fallback for UK names — masks first/last names"
+
+  - entity_type: UK_PHONE
+    protection_method: masking
+    priority: 2
+    options:
+      mask_char: "*"
+      visible_chars: 4
+      direction: right
+    description: "Mask UK phone numbers keeping last 4 digits"
+
+  - entity_type: UK_DRIVERS_LICENSE
+    protection_method: tokenization
+    priority: 1
+    description: "Tokenize UK driving licence numbers"
+
+  - entity_type: UK_PASSPORT
+    protection_method: tokenization
+    priority: 1
+    description: "Tokenize UK passport numbers"
+
+  - entity_type: UK_BANK_ACCOUNT
+    protection_method: aes256_encrypt
+    priority: 1
+    description: "Encrypt UK bank account / sort code"
+
+  - entity_type: UK_VRN
+    protection_method: masking
+    priority: 2
+    options:
+      mask_char: "*"
+      visible_chars: 0
+    description: "Fully mask vehicle registration numbers"

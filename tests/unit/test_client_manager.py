@@ -28,7 +28,7 @@ class TestAWSClientManager:
     def test_environment_variables_loaded(self, env_vars):
         """Verify environment variables are correctly loaded."""
         manager = get_client_manager()
-        assert manager.region == 'eu-west-2'
+        assert manager.region == 'us-east-1'
         assert manager.raw_bucket == 'test-raw-bucket'
         assert manager.secure_bucket == 'test-secure-bucket'
         assert manager.audit_table == 'test-audit-table'

@@ -2,16 +2,14 @@
 
 import csv
 import io
+import pandas as pd
 from typing import Optional
 
-import pandas as pd
 from src.handlers.base_handler import BaseHandler
 
 
 class CSVHandler(BaseHandler):
     """Handler for CSV file format processing."""
-
-    SUPPORTED_EXTENSIONS = ['.csv']
 
     def __init__(self, delimiter: str = ',', encoding: str = 'utf-8') -> None:
         super().__init__()
@@ -56,21 +54,12 @@ class CSVHandler(BaseHandler):
             self._add_validation_error(f"Failed to detect delimiter: {e}")
             return False
 
-        lines = [line for line in text.strip().split('\n') if line.strip()]
-        if len(lines) < 1:
-            self._add_validation_error("No data rows found")
-            return False
-
         try:
             text_io = io.StringIO(text)
             reader = csv.reader(text_io, delimiter=self._detected_delimiter)
             rows = list(reader)
 
-            if len(rows) < 1:
-                self._add_validation_error("No rows found in CSV")
-                return False
-
-            header_count = len(rows[0])
+            header_count = len(rows[0]) if rows else 0
             if header_count == 0:
                 self._add_validation_error("No columns found in header")
                 return False

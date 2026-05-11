@@ -6,8 +6,6 @@ from unittest.mock import MagicMock, patch
 from src.lambda_handler import (
     ProcessingError,
     _build_response,
-    _get_content_type,
-    _get_file_extension,
     handler,
 )
 
@@ -15,44 +13,7 @@ from src.lambda_handler import (
 class TestHelperFunctions:
     """Tests for helper functions."""
 
-    def test_get_file_extension_csv(self):
-        """Test CSV extension extraction."""
-        assert _get_file_extension('data/file.csv') == '.csv'
-
-    def test_get_file_extension_json(self):
-        """Test JSON extension extraction."""
-        assert _get_file_extension('data/file.json') == '.json'
-
-    def test_get_file_extension_parquet(self):
-        """Test Parquet extension extraction."""
-        assert _get_file_extension('data/file.parquet') == '.parquet'
-
-    def test_get_file_extension_uppercase(self):
-        """Test uppercase extension is lowercased."""
-        assert _get_file_extension('data/file.CSV') == '.csv'
-
-    def test_get_file_extension_no_extension(self):
-        """Test file without extension."""
-        assert _get_file_extension('data/file') == ''
-
-    def test_get_content_type_csv(self):
-        """Test CSV content type."""
-        assert _get_content_type('.csv') == 'text/csv'
-
-    def test_get_content_type_json(self):
-        """Test JSON content type."""
-        assert _get_content_type('.json') == 'application/json'
-
-    def test_get_content_type_parquet(self):
-        """Test Parquet content type."""
-        assert _get_content_type('.parquet') == 'application/octet-stream'
-
-    def test_get_content_type_unknown(self):
-        """Test unknown content type defaults to octet-stream."""
-        assert _get_content_type('.xyz') == 'application/octet-stream'
-
     def test_build_response_success(self):
-        """Test successful response building."""
         response = _build_response(200, 'Success', [{'id': 1}], [])
         assert response['statusCode'] == 200
         body = json.loads(response['body'])
@@ -61,7 +22,6 @@ class TestHelperFunctions:
         assert body['failed'] == 0
 
     def test_build_response_with_errors(self):
-        """Test response with errors."""
         response = _build_response(
             207, 'Partial', [{'id': 1}], [{'error': 'fail'}]
         )

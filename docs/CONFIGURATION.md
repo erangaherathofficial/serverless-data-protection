@@ -6,15 +6,14 @@ This document describes how to configure the serverless data protection framewor
 
 The Lambda function supports the following environment variables:
 
-| Variable              | Description                                 | Default                           |
-|-----------------------|---------------------------------------------|-----------------------------------|
-| `POLICY_BUCKET`       | S3 bucket containing policy files           | -                                 |
-| `POLICY_KEY`          | S3 key for policy YAML file                 | `policies/protection_policy.yaml` |
-| `SECURE_BUCKET`       | Destination bucket for protected data       | -                                 |
-| `AUDIT_TABLE_NAME`    | DynamoDB table for audit records            | -                                 |
-| `ENCRYPTION_KEY_ID`   | KMS key ID for AES-256 encryption           | -                                 |
-| `LOG_LEVEL`           | Logging level (DEBUG, INFO, WARNING, ERROR) | `INFO`                            |
-| `DETECTION_THRESHOLD` | Minimum confidence score for PII detection  | `0.5`                             |
+| Variable             | Description                                    | Default     |
+|----------------------|------------------------------------------------|-------------|
+| `AWS_REGION`         | AWS region for all service clients             | `us-east-1` |
+| `RAW_BUCKET_NAME`    | S3 bucket receiving uploaded source files      | -           |
+| `SECURE_BUCKET_NAME` | S3 bucket for protected output                 | -           |
+| `AUDIT_TABLE_NAME`   | DynamoDB table for audit records               | -           |
+| `KMS_KEY_ID`         | KMS key id used by AES-256 encryption strategy | -           |
+| `LOG_LEVEL`          | Python logging level                           | `INFO`      |
 
 ## Policy Configuration
 
@@ -25,26 +24,25 @@ Policies are defined in YAML format and control how PII is detected and protecte
 ```yaml
 version: "1.0"
 settings:
-  detection_threshold: 0.5
-  enable_audit: true
+  confidence_threshold: 0.7
   default_protection: masking
 
 rules:
   - entity_type: EMAIL_ADDRESS
     protection_method: sha256_hash
-    options:
-      salt: "optional-salt"
+    priority: 1
 
   - entity_type: CREDIT_CARD
     protection_method: aes256_encrypt
-    options:
-      key_id: "aws/kms/key-id"
+    priority: 1
 
   - entity_type: PHONE_NUMBER
     protection_method: masking
+    priority: 2
     options:
       mask_char: "*"
       visible_chars: 4
+      direction: right
 ```
 
 ### Supported Entity Types
@@ -66,6 +64,8 @@ UK-specific custom entities:
 - `UK_NINO` - National Insurance numbers
 - `UK_POSTCODE` - UK postal codes
 - `UK_PHONE` - UK phone numbers
+- `UK_NAME` - Common UK first/last names
+- `UK_CITY` - Major UK cities and towns
 - `UK_DRIVERS_LICENSE` - UK driving licence numbers
 - `UK_PASSPORT` - UK passport numbers
 - `UK_BANK_ACCOUNT` - UK bank account numbers
@@ -73,24 +73,25 @@ UK-specific custom entities:
 
 ### Protection Methods
 
+The YAML `options:` block recognises four fields parsed by
+`ProtectionOptions.from_dict`: `mask_char`, `visible_chars`, `direction`,
+and `token_prefix`. Unknown keys are silently dropped.
+
 #### AES-256 Encryption (`aes256_encrypt`)
 
-Reversible encryption using AES-256-CBC.
+Reversible encryption using AES-256-CBC with PKCS7 padding. The data key
+defaults to a per-container random key, which is appropriate for
+write-only workflows. To make ciphertext portable across cold starts,
+either set the `ENCRYPTION_KEY` environment variable to a base64-encoded
+32-byte key, or instantiate `AES256Encryption(use_kms=True,
+kms_key_id=<id>)` to fetch a data key from AWS KMS.
 
-Options:
-
-- `key_id`: AWS KMS key ID (optional, uses local key if not provided)
-
-Output format: `ENC:{base64_encoded_data}`
+Output format: `ENC:{base64_encoded_iv_and_ciphertext}`
 
 #### SHA-256 Hashing (`sha256_hash`)
 
-One-way cryptographic hash.
-
-Options:
-
-- `salt`: Optional salt value for the hash
-- `algorithm`: `sha256` (default) or `sha512`
+One-way cryptographic hash. Salt comes from the `HASH_SALT` environment
+variable (or the `salt` constructor argument).
 
 Output format: `HASH:{hex_digest}`
 
@@ -101,71 +102,72 @@ Partial character replacement.
 Options:
 
 - `mask_char`: Character to use for masking (default: `*`)
-- `visible_chars`: Number of visible characters at start and end (default: 4)
+- `visible_chars`: Number of characters preserved (default: `4`;
+  `0` means full mask)
+- `direction`: `right` (default), `left`, or `center` — which side of the
+  string stays visible
 
-Example: `john.smith@example.com` -> `john****@example.com`
+Example: `john.smith@example.com` → `john****@example.com`
 
 #### Tokenization (`tokenization`)
 
-Replace with surrogate values.
+Replace each value with a generated surrogate token, stored in the
+in-memory token vault for the lifetime of the Lambda invocation.
 
 Options:
 
-- `format`: `uuid` (default), `sequential`, or `format_preserving`
-- `reversible`: Whether to store mapping in vault (default: `true`)
+- `token_prefix`: Prefix on every token (default: `TOK_`)
 
-Output format: `TOKEN:{uuid}`
+Output format: `{token_prefix}{16-char alnum suffix}`
+
+#### Redaction (`redact`)
+
+Replace each value with a fixed redaction marker (default `[REDACTED]`).
+Use this when the value should be neither reversible nor partially
+visible.
 
 ### Rule Priorities
 
-Rules are evaluated in order. The first matching rule is applied. Use specific rules before general ones:
+When multiple rules target the same `entity_type`, the lowest `priority`
+value wins (`Policy.get_rule_for_entity` returns `min(matching, key=priority)`).
+Use a small priority for the rule you want to dominate:
 
 ```yaml
 rules:
-  # Specific rule for financial emails
   - entity_type: EMAIL_ADDRESS
-    column_pattern: ".*financial.*"
     protection_method: aes256_encrypt
+    priority: 1
 
-  # General rule for all other emails
   - entity_type: EMAIL_ADDRESS
     protection_method: sha256_hash
+    priority: 5  # fallback if priority-1 rule is removed
 ```
 
-### Column-Based Rules
-
-Target specific columns using patterns:
-
-```yaml
-rules:
-  - entity_type: PERSON
-    column_pattern: "^(name|full_name|customer_name)$"
-    protection_method: masking
-```
+If no rule matches an entity type, `settings.default_protection` is always
+applied. Valid methods are `aes256_encrypt`, `sha256_hash`, `masking`,
+`tokenization`, and `redact`.
 
 ## CloudFormation Parameters
 
 The SAM template accepts these parameters:
 
-| Parameter            | Description                                 | Default |
-|----------------------|---------------------------------------------|---------|
-| `Environment`        | Deployment environment (dev, staging, prod) | `dev`   |
-| `SourceBucketName`   | Source S3 bucket name                       | -       |
-| `SecureBucketName`   | Destination S3 bucket name                  | -       |
-| `PolicyBucketName`   | Policy files bucket                         | -       |
-| `AuditRetentionDays` | DynamoDB TTL in days                        | `90`    |
-| `LambdaMemorySize`   | Lambda memory in MB                         | `512`   |
-| `LambdaTimeout`      | Lambda timeout in seconds                   | `300`   |
+| Parameter          | Description                                 | Default |
+|--------------------|---------------------------------------------|---------|
+| `Environment`      | Deployment environment (dev, staging, prod) | `dev`   |
+| `LogRetentionDays` | CloudWatch log retention in days            | `30`    |
+
+Bucket and table names are derived from `Environment` and the AWS account id
+(`sdp-raw-data-${Environment}-${AccountId}`, `sdp-secure-data-${Environment}-${AccountId}`,
+`sdp-audit-${Environment}`). Lambda memory (`3008` MB) and timeout (`300` s) are
+fixed in `Globals.Function`. Audit-record TTL (90 days) is set in `lambda_handler.py`.
 
 ## File Format Configuration
 
 ### CSV Options
 
-The CSV handler automatically detects:
-
-- Delimiter (comma, semicolon, tab, pipe)
-- Encoding (UTF-8, Latin-1, etc.)
-- Quote character
+The CSV handler auto-detects the delimiter (comma, semicolon, tab, or pipe)
+using `csv.Sniffer`. Encoding defaults to UTF-8 and is configurable via
+`CSVHandler(encoding=...)`.
 
 ### JSON Options
 
@@ -182,63 +184,55 @@ Parquet files are processed using PyArrow with automatic schema detection.
 
 ## Audit Configuration
 
-### CloudWatch Metrics
+### CloudWatch Logs
 
-Metrics are published to the `DataProtection` namespace:
-
-- `ProcessingStarted` - Count of processing jobs started
-- `ProcessingCompleted` - Count of successful completions
-- `ProcessingDuration` - Processing time in milliseconds
-- `EntitiesDetected` - Count of PII entities found
-- `ProtectionsApplied` - Count of protection operations
-- `ProcessingErrors` - Count of errors
+The Lambda function writes structured log entries to its own log group
+(`/aws/lambda/sdp-data-protection-${Environment}`) for every record it
+processes: ingest, pipeline duration, detection counts, protection counts,
+and any errors. No custom CloudWatch metrics are emitted; the AWS/Lambda
+namespace metrics (`Invocations`, `Errors`, `Duration`, `Throttles`,
+`ConcurrentExecutions`) are charted on the dashboard the template provisions.
 
 ### DynamoDB Audit Table
 
-The audit table uses a single-table design:
+The audit table uses a single-table design with a 90-day TTL on every item:
 
 **Primary Key:**
 
-- `pk`: Partition key (e.g., `FILE#bucket/key`)
-- `sk`: Sort key (e.g., `PROCESS#timestamp`)
+- `pk`: Partition key — `FILE#${source_bucket}/${source_key}`
+- `sk`: Sort key — `PROCESS#${iso8601_timestamp}`
 
 **GSI1:**
 
-- `gsi1pk`: Date partition (e.g., `DATE#2024-01-15`)
-- `gsi1sk`: File identifier
+- `gsi1pk`: Date partition — `DATE#${YYYY-MM-DD}`
+- `gsi1sk`: File identifier — `FILE#${file_name}`
 
-Record types:
+**Item attributes** (written by `lambda_handler._create_audit_record`):
 
-- `PROCESS#` - Processing activity records
-- `DETECTION#` - PII detection results
-- `PROTECTION#` - Protection action records
-- `ENTITY#` - Individual entity records (optional)
+- `request_id`, `source_bucket`, `source_key`, `secure_key`
+- `file_format`, `success`, `duration_ms`, `timestamp`, `error`
+- `detection_summary` — entity counts and columns with PII (raw entity texts
+  are stripped before write to keep PII out of the audit log)
+- `protection_summary` — total protections applied and method breakdown
+- `stage_durations` — per-stage timings keyed by pipeline stage name
+- `ttl` — Unix timestamp 90 days in the future
 
 ## Detection Threshold Tuning
 
-Adjust the detection threshold based on your accuracy requirements:
+Set `settings.confidence_threshold` in the policy YAML (default `0.7`):
 
 | Threshold | Precision | Recall   | Use Case                                  |
 |-----------|-----------|----------|-------------------------------------------|
 | 0.3       | Lower     | Higher   | Maximum detection, accept false positives |
-| 0.5       | Balanced  | Balanced | General use (recommended)                 |
-| 0.7       | Higher    | Lower    | Minimize false positives                  |
+| 0.5       | Balanced  | Balanced | Aggressive detection                      |
+| 0.7       | Higher    | Lower    | Minimise false positives (default)        |
 | 0.9       | Highest   | Lowest   | Only high-confidence detections           |
 
 ## Performance Tuning
 
-### Lambda Memory
-
-Memory affects both available RAM and CPU allocation:
-
-- 512MB: Suitable for files up to 10MB
-- 1024MB: Suitable for files up to 50MB
-- 2048MB: Suitable for files up to 100MB
-
-### Timeout
-
-Set timeout based on expected file sizes:
-
-- Small files (<1MB): 30 seconds
-- Medium files (1-10MB): 60 seconds
-- Large files (10-100MB): 300 seconds
+The SAM template provisions the Lambda with `MemorySize: 3008` (≈ 2 vCPU,
+the default account quota — raise via AWS Service Quotas if higher is needed)
+and `Timeout: 300` seconds, sized to load the `en_core_web_lg` spaCy model
+on a cold start and process files up to roughly 1 MB inside the timeout.
+Adjust both values in `infrastructure/template.yaml` (`Globals.Function`)
+if your workload needs different limits.

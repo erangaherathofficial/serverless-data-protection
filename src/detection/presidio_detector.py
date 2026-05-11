@@ -1,13 +1,11 @@
 """PII detection using Microsoft Presidio."""
 
-import logging
 from dataclasses import dataclass, field
-from typing import Optional
-
 from presidio_analyzer import AnalyzerEngine
 from presidio_analyzer.nlp_engine import NlpEngineProvider
+from typing import Optional
 
-logger = logging.getLogger(__name__)
+from src.detection.custom_recognizers import get_custom_recognizers
 
 
 @dataclass
@@ -68,16 +66,11 @@ class DetectionResult:
 class PresidioDetector:
     """PII detector using Microsoft Presidio Analyzer.
 
-    Detects various PII entity types in text data including:
-    - EMAIL_ADDRESS
-    - PHONE_NUMBER
-    - CREDIT_CARD
-    - PERSON
-    - LOCATION
-    - DATE_TIME
-    - IP_ADDRESS
-    - IBAN_CODE
-    - UK_NHS (custom)
+    Detects PII entity types listed in DEFAULT_ENTITIES, covering Presidio's
+    built-in recognisers (EMAIL_ADDRESS, PHONE_NUMBER, CREDIT_CARD, PERSON,
+    LOCATION, DATE_TIME, IP_ADDRESS, IBAN_CODE) and the framework's UK custom
+    recognisers (UK_NHS, UK_NINO, UK_POSTCODE, UK_PHONE, UK_CITY, UK_NAME,
+    UK_DRIVERS_LICENSE, UK_PASSPORT, UK_BANK_ACCOUNT, UK_VRN).
     """
 
     DEFAULT_ENTITIES = [
@@ -89,15 +82,24 @@ class PresidioDetector:
         'DATE_TIME',
         'IP_ADDRESS',
         'IBAN_CODE',
-        'US_SSN',
         'UK_NHS',
+        'UK_NINO',
+        'UK_POSTCODE',
+        'UK_PHONE',
+        'UK_CITY',
+        'UK_NAME',
+        'UK_DRIVERS_LICENSE',
+        'UK_PASSPORT',
+        'UK_BANK_ACCOUNT',
+        'UK_VRN',
     ]
 
     def __init__(
             self,
             entities: Optional[list[str]] = None,
             score_threshold: float = 0.7,
-            language: str = 'en'
+            language: str = 'en',
+            custom_recognizers: Optional[list] = None,
     ) -> None:
         """Initialize Presidio detector.
 
@@ -105,12 +107,13 @@ class PresidioDetector:
             entities: List of entity types to detect (default: all supported)
             score_threshold: Minimum confidence score (0.0 to 1.0)
             language: Language code for NLP processing
+            custom_recognizers: Recognizers to register with the analyzer
         """
         self._entities = entities or self.DEFAULT_ENTITIES
         self._score_threshold = score_threshold
         self._language = language
+        self._custom_recognizers = custom_recognizers or []
         self._analyzer: Optional[AnalyzerEngine] = None
-        self._custom_recognizers: list = []
 
     @property
     def analyzer(self) -> AnalyzerEngine:
@@ -120,36 +123,27 @@ class PresidioDetector:
         return self._analyzer
 
     def _create_analyzer(self) -> AnalyzerEngine:
-        """Create and configure Presidio analyzer engine."""
-        try:
-            provider = NlpEngineProvider(nlp_configuration={
-                "nlp_engine_name": "spacy",
-                "models": [{"lang_code": "en", "model_name": "en_core_web_sm"}]
-            })
-            nlp_engine = provider.create_engine()
+        """Create and configure Presidio analyzer engine.
 
-            analyzer = AnalyzerEngine(
-                nlp_engine=nlp_engine,
-                supported_languages=[self._language]
-            )
-        except Exception as e:
-            logger.warning(f"Failed to create NLP engine: {e}. Using default.")
-            analyzer = AnalyzerEngine()
+        Fails loudly if the configured spaCy model cannot be loaded — falling
+        back to a smaller default would silently degrade detection accuracy
+        and hide a deployment problem.
+        """
+        provider = NlpEngineProvider(nlp_configuration={
+            "nlp_engine_name": "spacy",
+            "models": [{"lang_code": "en", "model_name": "en_core_web_lg"}]
+        })
+        nlp_engine = provider.create_engine()
+
+        analyzer = AnalyzerEngine(
+            nlp_engine=nlp_engine,
+            supported_languages=[self._language]
+        )
 
         for recognizer in self._custom_recognizers:
             analyzer.registry.add_recognizer(recognizer)
 
         return analyzer
-
-    def add_custom_recognizer(self, recognizer) -> None:
-        """Add custom recognizer to the analyzer.
-
-        Args:
-            recognizer: Presidio recognizer instance
-        """
-        self._custom_recognizers.append(recognizer)
-        if self._analyzer is not None:
-            self._analyzer.registry.add_recognizer(recognizer)
 
     def detect_text(self, text: str) -> list[PIIEntity]:
         """Detect PII entities in text.
@@ -163,16 +157,12 @@ class PresidioDetector:
         if not text or not text.strip():
             return []
 
-        try:
-            results = self.analyzer.analyze(
-                text=text,
-                entities=self._entities,
-                language=self._language,
-                score_threshold=self._score_threshold
-            )
-        except Exception as e:
-            logger.error(f"Presidio analysis failed: {e}")
-            return []
+        results = self.analyzer.analyze(
+            text=text,
+            entities=self._entities,
+            language=self._language,
+            score_threshold=self._score_threshold
+        )
 
         return [
             PIIEntity(
@@ -228,97 +218,17 @@ class PresidioDetector:
         return result
 
     def detect_column(self, df, column_name: str) -> DetectionResult:
-        """Detect PII entities in a specific column.
-
-        Args:
-            df: Pandas DataFrame
-            column_name: Column to analyze
-
-        Returns:
-            DetectionResult for the column
-        """
+        """Detect PII entities in a single named column."""
         return self.detect_dataframe(df, columns=[column_name])
-
-    def get_column_entity_types(self, df, column_name: str) -> set[str]:
-        """Get unique entity types found in a column.
-
-        Args:
-            df: Pandas DataFrame
-            column_name: Column to analyze
-
-        Returns:
-            Set of entity type names found
-        """
-        result = self.detect_column(df, column_name)
-        return set(result.entity_counts.keys())
-
-    def get_pii_summary(self, df) -> dict[str, dict[str, int]]:
-        """Get summary of PII entities by column.
-
-        Args:
-            df: Pandas DataFrame
-
-        Returns:
-            Dictionary mapping column names to entity type counts
-        """
-        summary = {}
-        result = self.detect_dataframe(df)
-
-        for entity in result.entities:
-            if entity.column_name:
-                if entity.column_name not in summary:
-                    summary[entity.column_name] = {}
-                summary[entity.column_name][entity.entity_type] = (
-                        summary[entity.column_name].get(entity.entity_type, 0) + 1
-                )
-
-        return summary
-
-    @property
-    def supported_entities(self) -> list[str]:
-        """Get list of supported entity types."""
-        return self._entities.copy()
-
-    @property
-    def score_threshold(self) -> float:
-        """Get current score threshold."""
-        return self._score_threshold
-
-    def set_score_threshold(self, threshold: float) -> None:
-        """Update score threshold.
-
-        Args:
-            threshold: New threshold (0.0 to 1.0)
-        """
-        if not 0.0 <= threshold <= 1.0:
-            raise ValueError("Threshold must be between 0.0 and 1.0")
-        self._score_threshold = threshold
 
 
 def create_detector(
         entities: Optional[list[str]] = None,
         score_threshold: float = 0.7,
-        include_custom: bool = True
 ) -> PresidioDetector:
-    """Create configured Presidio detector.
-
-    Args:
-        entities: Entity types to detect
-        score_threshold: Minimum confidence score
-        include_custom: Whether to include custom recognizers
-
-    Returns:
-        Configured PresidioDetector instance
-    """
-    from src.detection.custom_recognizers import get_custom_recognizers
-
-    detector = PresidioDetector(
+    """Create a Presidio detector with the framework's UK custom recognizers."""
+    return PresidioDetector(
         entities=entities,
-        score_threshold=score_threshold
+        score_threshold=score_threshold,
+        custom_recognizers=get_custom_recognizers(),
     )
-
-    if include_custom:
-        for recognizer in get_custom_recognizers():
-            detector.add_custom_recognizer(recognizer)
-
-    return detector

@@ -1,22 +1,20 @@
 """Pipeline orchestrator for data protection workflow."""
 
 import logging
+import pandas as pd
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
-import pandas as pd
 from src.detection.presidio_detector import (
     DetectionResult,
     PresidioDetector,
     create_detector,
 )
-from src.handlers.base_handler import ProcessedData
+from src.handlers.base_handler import BaseHandler, ProcessedData
 from src.handlers.handler_factory import HandlerFactory, get_handler
 from src.policy.policy_parser import Policy, load_policy
-from src.policy.protection_mapper import ProtectionMapper
 from src.policy.rule_evaluator import EvaluationResult, RuleEvaluator
 from src.protection.base_protection import ProtectionRegistry
 from src.validation.schema_validator import SchemaValidator
@@ -56,164 +54,98 @@ class PipelineResult:
     file_format: str
     stage_results: list[StageResult] = field(default_factory=list)
     protected_data: Optional[bytes] = None
-    original_schema: Optional[dict] = None
     detection_summary: Optional[dict] = None
     protection_summary: Optional[dict] = None
     total_duration_ms: float = 0
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
     error: Optional[str] = None
 
     def add_stage_result(self, result: StageResult) -> None:
-        """Add stage result."""
         self.stage_results.append(result)
         if not result.success:
             self.success = False
 
     def get_stage(self, stage: PipelineStage) -> Optional[StageResult]:
-        """Get result for specific stage."""
         for sr in self.stage_results:
             if sr.stage == stage:
                 return sr
         return None
 
-    def to_dict(self) -> dict:
-        """Convert to dictionary for serialization."""
-        return {
-            'success': self.success,
-            'file_name': self.file_name,
-            'file_format': self.file_format,
-            'total_duration_ms': self.total_duration_ms,
-            'timestamp': self.timestamp,
-            'error': self.error,
-            'stages': [
-                {
-                    'stage': sr.stage.value,
-                    'success': sr.success,
-                    'duration_ms': sr.duration_ms,
-                    'error': sr.error,
-                    'metadata': sr.metadata
-                }
-                for sr in self.stage_results
-            ],
-            'detection_summary': self.detection_summary,
-            'protection_summary': self.protection_summary
-        }
-
 
 class PipelineOrchestrator:
-    """Orchestrates the 7-step data protection pipeline.
+    """Orchestrates the 7-stage data protection pipeline.
 
-    Pipeline Steps:
-    1. RECEIVE - Receive file content from S3
-    2. VALIDATE - Validate file format (CSV, JSON, Parquet)
-    3. DETECT - Scan for PII using Presidio
-    4. EVALUATE - Evaluate policy and generate protection plan
-    5. PROTECT - Apply protection techniques
-    6. SCHEMA_CHECK - Validate schema preservation
-    7. OUTPUT - Serialize protected data for storage
+    Stages: RECEIVE → VALIDATE → DETECT → EVALUATE → PROTECT → SCHEMA_CHECK → OUTPUT.
+    On stage failure the pipeline returns the partial result; subsequent stages
+    are skipped.
     """
 
     def __init__(
             self,
             policy: Optional[Policy] = None,
-            detector: Optional[PresidioDetector] = None,
-            fail_fast: bool = True
+            detector: Optional[PresidioDetector] = None
     ) -> None:
-        """Initialize pipeline orchestrator.
-
-        Args:
-            policy: Protection policy (loads default if None)
-            detector: PII detector (creates default if None)
-            fail_fast: Stop on first error
-        """
         self._policy = policy or load_policy()
         self._detector = detector or create_detector(
             score_threshold=self._policy.settings.confidence_threshold
         )
-        self._fail_fast = fail_fast
         self._schema_validator = SchemaValidator()
         self._rule_evaluator = RuleEvaluator(self._policy)
-        self._protection_mapper = ProtectionMapper(self._policy)
-
-        self._stage_hooks: dict[PipelineStage, list[Callable]] = {
-            stage: [] for stage in PipelineStage
-        }
 
     def process(self, content: bytes, file_name: str) -> PipelineResult:
-        """Execute the complete protection pipeline.
-
-        Args:
-            content: Raw file content
-            file_name: Original file name
-
-        Returns:
-            PipelineResult with protected data and metadata
-        """
         start_time = time.time()
 
         result = PipelineResult(
             success=True,
             file_name=file_name,
-            file_format=self._get_format(file_name)
+            file_format=HandlerFactory.format_name(file_name)
         )
 
         try:
-            # Stage 1: Receive
             stage_result = self._stage_receive(content, file_name)
             result.add_stage_result(stage_result)
-            if not stage_result.success and self._fail_fast:
+            if not stage_result.success:
                 return self._finalize_result(result, start_time)
 
-            # Stage 2: Validate and Parse
             stage_result = self._stage_validate(content, file_name)
             result.add_stage_result(stage_result)
-            if not stage_result.success and self._fail_fast:
+            if not stage_result.success:
                 return self._finalize_result(result, start_time)
 
             processed_data: ProcessedData = stage_result.data
+            handler = stage_result.metadata.pop('handler')
             original_df = processed_data.dataframe.copy()
-            result.original_schema = processed_data.metadata.schema
 
-            # Stage 3: Detect PII
             stage_result = self._stage_detect(processed_data.dataframe)
             result.add_stage_result(stage_result)
-            if not stage_result.success and self._fail_fast:
+            if not stage_result.success:
                 return self._finalize_result(result, start_time)
 
             detection_result: DetectionResult = stage_result.data
             result.detection_summary = detection_result.to_dict()
 
-            # Stage 4: Evaluate Policy
             stage_result = self._stage_evaluate(detection_result)
             result.add_stage_result(stage_result)
-            if not stage_result.success and self._fail_fast:
+            if not stage_result.success:
                 return self._finalize_result(result, start_time)
 
             evaluation_result: EvaluationResult = stage_result.data
 
-            # Stage 5: Apply Protection
             stage_result = self._stage_protect(
                 processed_data.dataframe,
-                detection_result,
                 evaluation_result
             )
             result.add_stage_result(stage_result)
-            if not stage_result.success and self._fail_fast:
+            if not stage_result.success:
                 return self._finalize_result(result, start_time)
 
             protected_df: pd.DataFrame = stage_result.data
             result.protection_summary = stage_result.metadata
 
-            # Stage 6: Schema Validation
             stage_result = self._stage_schema_check(original_df, protected_df)
             result.add_stage_result(stage_result)
-            if not stage_result.success and self._fail_fast:
+            if not stage_result.success:
                 return self._finalize_result(result, start_time)
 
-            # Stage 7: Output
-            handler = get_handler(file_name)
             stage_result = self._stage_output(protected_df, handler)
             result.add_stage_result(stage_result)
 
@@ -228,10 +160,7 @@ class PipelineOrchestrator:
         return self._finalize_result(result, start_time)
 
     def _stage_receive(self, content: bytes, file_name: str) -> StageResult:
-        """Stage 1: Receive and validate input."""
         start = time.time()
-        self._run_hooks(PipelineStage.RECEIVE, 'before', content, file_name)
-
         try:
             if not content:
                 return StageResult(
@@ -249,7 +178,7 @@ class PipelineOrchestrator:
                     error=f"Unsupported file format: {file_name}"
                 )
 
-            result = StageResult(
+            return StageResult(
                 stage=PipelineStage.RECEIVE,
                 success=True,
                 duration_ms=self._elapsed_ms(start),
@@ -258,9 +187,6 @@ class PipelineOrchestrator:
                     'content_size': len(content)
                 }
             )
-
-            self._run_hooks(PipelineStage.RECEIVE, 'after', result)
-            return result
 
         except Exception as e:
             return StageResult(
@@ -271,15 +197,12 @@ class PipelineOrchestrator:
             )
 
     def _stage_validate(self, content: bytes, file_name: str) -> StageResult:
-        """Stage 2: Validate and parse file."""
         start = time.time()
-        self._run_hooks(PipelineStage.VALIDATE, 'before', content, file_name)
-
         try:
             handler = get_handler(file_name)
             processed_data = handler.process(content, file_name)
 
-            result = StageResult(
+            return StageResult(
                 stage=PipelineStage.VALIDATE,
                 success=True,
                 duration_ms=self._elapsed_ms(start),
@@ -287,12 +210,10 @@ class PipelineOrchestrator:
                 metadata={
                     'format': processed_data.metadata.file_format,
                     'rows': processed_data.metadata.row_count,
-                    'columns': processed_data.metadata.column_count
+                    'columns': processed_data.metadata.column_count,
+                    'handler': handler,
                 }
             )
-
-            self._run_hooks(PipelineStage.VALIDATE, 'after', result)
-            return result
 
         except Exception as e:
             return StageResult(
@@ -303,14 +224,11 @@ class PipelineOrchestrator:
             )
 
     def _stage_detect(self, df: pd.DataFrame) -> StageResult:
-        """Stage 3: Detect PII entities."""
         start = time.time()
-        self._run_hooks(PipelineStage.DETECT, 'before', df)
-
         try:
             detection_result = self._detector.detect_dataframe(df)
 
-            result = StageResult(
+            return StageResult(
                 stage=PipelineStage.DETECT,
                 success=True,
                 duration_ms=self._elapsed_ms(start),
@@ -325,9 +243,6 @@ class PipelineOrchestrator:
                 }
             )
 
-            self._run_hooks(PipelineStage.DETECT, 'after', result)
-            return result
-
         except Exception as e:
             return StageResult(
                 stage=PipelineStage.DETECT,
@@ -339,23 +254,17 @@ class PipelineOrchestrator:
     def _stage_evaluate(
             self, detection_result: DetectionResult
     ) -> StageResult:
-        """Stage 4: Evaluate policy and generate protection plan."""
         start = time.time()
-        self._run_hooks(PipelineStage.EVALUATE, 'before', detection_result)
-
         try:
             evaluation_result = self._rule_evaluator.evaluate(detection_result)
 
-            result = StageResult(
+            return StageResult(
                 stage=PipelineStage.EVALUATE,
                 success=True,
                 duration_ms=self._elapsed_ms(start),
                 data=evaluation_result,
                 metadata=evaluation_result.statistics
             )
-
-            self._run_hooks(PipelineStage.EVALUATE, 'after', result)
-            return result
 
         except Exception as e:
             return StageResult(
@@ -368,18 +277,19 @@ class PipelineOrchestrator:
     def _stage_protect(
             self,
             df: pd.DataFrame,
-            detection_result: DetectionResult,
             evaluation_result: EvaluationResult
     ) -> StageResult:
-        """Stage 5: Apply protection techniques."""
         start = time.time()
-        self._run_hooks(PipelineStage.PROTECT, 'before', df, evaluation_result)
-
         try:
             protected_df = df.copy()
             protection_counts: dict[str, int] = {}
+            failures = 0
 
-            for action in evaluation_result.actions:
+            ordered_actions = sorted(
+                evaluation_result.actions, key=lambda a: a.priority
+            )
+            applied_spans: dict[tuple[int, str], list[tuple[int, int]]] = {}
+            for action in ordered_actions:
                 col = action.entity.column_name
                 row = action.entity.row_index
 
@@ -390,6 +300,12 @@ class PipelineOrchestrator:
                     continue
 
                 if row >= len(protected_df):
+                    continue
+
+                e_start = action.entity.start
+                e_end = action.entity.end
+                spans = applied_spans.setdefault((row, col), [])
+                if any(s <= e_start and e_end <= e for s, e in spans):
                     continue
 
                 current_value = str(protected_df.at[row, col])
@@ -405,25 +321,32 @@ class PipelineOrchestrator:
                     )
                     protected_df.at[row, col] = new_value
 
-                    count = protection_counts.get(method, 0)
-                    protection_counts[method] = count + 1
+                    spans.append((e_start, e_end))
+                    protection_counts[method] = (
+                            protection_counts.get(method, 0) + 1
+                    )
 
                 except Exception as e:
-                    logger.warning(f"Protection failed for {col}[{row}]: {e}")
+                    failures += 1
+                    logger.debug(f"Protection failed for {col}[{row}]: {e}")
 
-            result = StageResult(
+            if failures:
+                logger.warning(
+                    f"Protection skipped {failures} action(s); "
+                    f"see debug logs for details"
+                )
+
+            return StageResult(
                 stage=PipelineStage.PROTECT,
                 success=True,
                 duration_ms=self._elapsed_ms(start),
                 data=protected_df,
                 metadata={
                     'protections_applied': sum(protection_counts.values()),
-                    'methods_used': protection_counts
+                    'methods_used': protection_counts,
+                    'failures': failures,
                 }
             )
-
-            self._run_hooks(PipelineStage.PROTECT, 'after', result)
-            return result
 
         except Exception as e:
             return StageResult(
@@ -438,18 +361,13 @@ class PipelineOrchestrator:
             original_df: pd.DataFrame,
             protected_df: pd.DataFrame
     ) -> StageResult:
-        """Stage 6: Validate schema preservation."""
         start = time.time()
-        self._run_hooks(
-            PipelineStage.SCHEMA_CHECK, 'before', original_df, protected_df
-        )
-
         try:
             validation_result = self._schema_validator.validate(
                 original_df, protected_df
             )
 
-            result = StageResult(
+            return StageResult(
                 stage=PipelineStage.SCHEMA_CHECK,
                 success=validation_result.is_valid,
                 duration_ms=self._elapsed_ms(start),
@@ -464,9 +382,6 @@ class PipelineOrchestrator:
                 )
             )
 
-            self._run_hooks(PipelineStage.SCHEMA_CHECK, 'after', result)
-            return result
-
         except Exception as e:
             return StageResult(
                 stage=PipelineStage.SCHEMA_CHECK,
@@ -475,15 +390,14 @@ class PipelineOrchestrator:
                 error=str(e)
             )
 
-    def _stage_output(self, df: pd.DataFrame, handler) -> StageResult:
-        """Stage 7: Serialize protected data."""
+    def _stage_output(
+            self, df: pd.DataFrame, handler: BaseHandler
+    ) -> StageResult:
         start = time.time()
-        self._run_hooks(PipelineStage.OUTPUT, 'before', df)
-
         try:
             serialized = handler.serialize(df)
 
-            result = StageResult(
+            return StageResult(
                 stage=PipelineStage.OUTPUT,
                 success=True,
                 duration_ms=self._elapsed_ms(start),
@@ -494,9 +408,6 @@ class PipelineOrchestrator:
                 }
             )
 
-            self._run_hooks(PipelineStage.OUTPUT, 'after', result)
-            return result
-
         except Exception as e:
             return StageResult(
                 stage=PipelineStage.OUTPUT,
@@ -505,35 +416,7 @@ class PipelineOrchestrator:
                 error=str(e)
             )
 
-    def register_hook(
-            self,
-            stage: PipelineStage,
-            hook: Callable
-    ) -> None:
-        """Register a hook for a pipeline stage.
-
-        Args:
-            stage: Pipeline stage to hook
-            hook: Callback function
-        """
-        self._stage_hooks[stage].append(hook)
-
-    def _run_hooks(self, stage: PipelineStage, timing: str, *args) -> None:
-        """Run hooks for a stage."""
-        for hook in self._stage_hooks[stage]:
-            try:
-                hook(stage, timing, *args)
-            except Exception as e:
-                logger.warning(f"Hook error at {stage.value}/{timing}: {e}")
-
-    def _get_format(self, file_name: str) -> str:
-        """Extract format from file name."""
-        if '.' in file_name:
-            return file_name.rsplit('.', 1)[-1].upper()
-        return 'UNKNOWN'
-
     def _elapsed_ms(self, start: float) -> float:
-        """Calculate elapsed time in milliseconds."""
         return (time.time() - start) * 1000
 
     def _finalize_result(
@@ -541,25 +424,10 @@ class PipelineOrchestrator:
             result: PipelineResult,
             start_time: float
     ) -> PipelineResult:
-        """Finalize pipeline result."""
         result.total_duration_ms = (time.time() - start_time) * 1000
         return result
 
 
-def create_pipeline(
-        policy_path: Optional[str] = None,
-        score_threshold: float = 0.7
-) -> PipelineOrchestrator:
-    """Create configured pipeline orchestrator.
-
-    Args:
-        policy_path: Path to policy file
-        score_threshold: PII detection threshold
-
-    Returns:
-        Configured PipelineOrchestrator
-    """
-    policy = load_policy(policy_path) if policy_path else load_policy()
-    detector = create_detector(score_threshold=score_threshold)
-
-    return PipelineOrchestrator(policy=policy, detector=detector)
+def create_pipeline(policy_path: Optional[str] = None) -> PipelineOrchestrator:
+    """Create a pipeline whose detection threshold is read from the policy."""
+    return PipelineOrchestrator(policy=load_policy(policy_path))

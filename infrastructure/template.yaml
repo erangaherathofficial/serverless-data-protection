@@ -30,10 +30,6 @@ Globals:
         LOG_LEVEL: INFO
 
 Resources:
-  # ============================================================================
-  # S3 BUCKETS
-  # ============================================================================
-
   RawDataBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -69,10 +65,6 @@ Resources:
       VersioningConfiguration:
         Status: Enabled
 
-  # ============================================================================
-  # KMS KEY
-  # ============================================================================
-
   EncryptionKey:
     Type: AWS::KMS::Key
     Properties:
@@ -87,16 +79,6 @@ Resources:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 'kms:*'
             Resource: '*'
-
-  EncryptionKeyAlias:
-    Type: AWS::KMS::Alias
-    Properties:
-      AliasName: !Sub 'alias/sdp-encryption-key-${Environment}'
-      TargetKeyId: !Ref EncryptionKey
-
-  # ============================================================================
-  # DYNAMODB TABLE (AUDIT)
-  # ============================================================================
 
   AuditTable:
     Type: AWS::DynamoDB::Table
@@ -134,15 +116,13 @@ Resources:
         AttributeName: ttl
         Enabled: true
 
-  # ============================================================================
-  # LAMBDA FUNCTION
-  # ============================================================================
-
   DataProtectionFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub 'sdp-data-protection-${Environment}'
       PackageType: Image
+      Architectures:
+        - arm64
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
@@ -167,15 +147,12 @@ Resources:
                   key:
                     - suffix: .csv
                     - suffix: .json
+                    - suffix: .ndjson
                     - suffix: .parquet
     Metadata:
       Dockerfile: Dockerfile
       DockerContext: ../
-      DockerTag: latest
-
-  # ============================================================================
-  # IAM ROLE
-  # ============================================================================
+      DockerTag: !Sub 'sdp-${Environment}'
 
   LambdaExecutionRole:
     Type: AWS::IAM::Role
@@ -205,7 +182,6 @@ Resources:
               - Effect: Allow
                 Action:
                   - 's3:PutObject'
-                  - 's3:PutObjectAcl'
                 Resource:
                   - !Sub 'arn:aws:s3:::sdp-secure-data-${Environment}-${AWS::AccountId}/*'
         - PolicyName: DynamoDBAccess
@@ -215,39 +191,23 @@ Resources:
               - Effect: Allow
                 Action:
                   - 'dynamodb:PutItem'
-                  - 'dynamodb:GetItem'
-                  - 'dynamodb:Query'
-                  - 'dynamodb:UpdateItem'
                 Resource:
                   - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/sdp-audit-${Environment}'
-                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/sdp-audit-${Environment}/index/*'
         - PolicyName: KMSAccess
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
-                  - 'kms:Encrypt'
-                  - 'kms:Decrypt'
                   - 'kms:GenerateDataKey'
-                  - 'kms:GenerateDataKeyWithoutPlaintext'
-                  - 'kms:DescribeKey'
                 Resource:
-                  - !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*'
-
-  # ============================================================================
-  # CLOUDWATCH LOGS
-  # ============================================================================
+                  - !GetAtt EncryptionKey.Arn
 
   LambdaLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/lambda/sdp-data-protection-${Environment}'
       RetentionInDays: !Ref LogRetentionDays
-
-  # ============================================================================
-  # CLOUDWATCH ALARMS
-  # ============================================================================
 
   ErrorRateAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -276,7 +236,7 @@ Resources:
       Statistic: Average
       Period: 300
       EvaluationPeriods: 2
-      Threshold: 60000
+      Threshold: 120000
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: FunctionName
@@ -316,10 +276,6 @@ Resources:
         - Name: FunctionName
           Value: !Ref DataProtectionFunction
       TreatMissingData: notBreaching
-
-  # ============================================================================
-  # CLOUDWATCH DASHBOARD
-  # ============================================================================
 
   MonitoringDashboard:
     Type: AWS::CloudWatch::Dashboard

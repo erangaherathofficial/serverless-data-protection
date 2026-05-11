@@ -93,11 +93,6 @@ class TestPresidioDetector:
         """Create detector instance."""
         return PresidioDetector(score_threshold=0.5)
 
-    def test_detector_initialization(self, detector):
-        """Test detector initializes correctly."""
-        assert detector.score_threshold == 0.5
-        assert len(detector.supported_entities) > 0
-
     def test_detect_email(self, detector):
         """Test email detection."""
         text = "Contact me at john.smith@example.com for more info."
@@ -108,17 +103,6 @@ class TestPresidioDetector:
         ]
         assert len(email_entities) >= 1
         assert 'john.smith@example.com' in email_entities[0].text
-
-    def test_detect_phone_number(self, detector):
-        """Test phone number detection."""
-        # Use a more universally recognized phone format
-        text = "Call me at 555-123-4567 or +1-555-987-6543 tomorrow."
-        entities = detector.detect_text(text)
-
-        # Check for any phone-related entities (varies by Presidio version)
-        # Presidio phone detection can be version-dependent
-        # Just verify no errors occur
-        assert isinstance(entities, list)
 
     def test_detect_credit_card(self, detector):
         """Test credit card detection."""
@@ -169,30 +153,6 @@ class TestPresidioDetector:
 
         assert result.total_cells_scanned == 2
         assert 'EMAIL_ADDRESS' in result.entity_counts
-
-    def test_get_pii_summary(self, detector):
-        """Test PII summary generation."""
-        df = pd.DataFrame({
-            'email': ['john@test.com'],
-            'phone': ['+44 7911 123456']
-        })
-
-        summary = detector.get_pii_summary(df)
-
-        assert 'email' in summary or 'phone' in summary
-
-    def test_set_score_threshold(self, detector):
-        """Test threshold modification."""
-        detector.set_score_threshold(0.8)
-        assert detector.score_threshold == 0.8
-
-    def test_invalid_threshold(self, detector):
-        """Test invalid threshold raises error."""
-        with pytest.raises(ValueError):
-            detector.set_score_threshold(1.5)
-
-        with pytest.raises(ValueError):
-            detector.set_score_threshold(-0.1)
 
 
 class TestUKNHSRecognizer:
@@ -288,7 +248,7 @@ class TestCustomRecognizers:
     def test_get_custom_recognizers(self):
         """Test getting all custom recognizers."""
         recognizers = get_custom_recognizers()
-        assert len(recognizers) >= 8
+        assert len(recognizers) == 10
 
     def test_recognizer_types(self):
         """Test recognizer entity types are unique."""

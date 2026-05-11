@@ -1,0 +1,15 @@
+version = 0.1
+
+[default.global.parameters]
+stack_name = "serverless-data-protection-dev"
+
+[default.deploy.parameters]
+stack_name = "serverless-data-protection-dev"
+s3_prefix = "serverless-data-protection-dev"
+region = "us-east-1"
+confirm_changeset = false
+capabilities = "CAPABILITY_NAMED_IAM"
+parameter_overrides = "Environment=\"dev\" LogRetentionDays=\"30\""
+resolve_s3 = true
+resolve_image_repos = true
+disable_rollback = false

@@ -23,9 +23,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Project root directory
 PROJECT_ROOT = Path(__file__).parent.parent
-TESTS_DIR = PROJECT_ROOT / 'tests'
 
 
 def run_command(cmd: list[str], description: str) -> int:
@@ -65,7 +63,9 @@ def run_security_tests(verbose: bool = False) -> int:
 
 def run_performance_tests(verbose: bool = False) -> int:
     """Run performance tests."""
-    cmd = ['pytest', 'tests/performance/', '-v', '-m', 'performance', '-s']
+    cmd = ['pytest', 'tests/performance/', '-v', '-m', 'performance']
+    if verbose:
+        cmd.append('-s')
     return run_command(cmd, 'Performance Tests')
 
 
@@ -108,7 +108,7 @@ def run_quick_tests(verbose: bool = False) -> int:
 
 def generate_test_data() -> int:
     """Generate synthetic test data."""
-    cmd = ['python', 'tests/test_data/generate_test_data.py']
+    cmd = ['python', 'test_data/generate_test_data.py']
     return run_command(cmd, 'Generate Test Data')
 
 
@@ -158,10 +158,8 @@ Examples:
 
     args = parser.parse_args()
 
-    # Ensure we're in the project root
     os.chdir(PROJECT_ROOT)
 
-    # Map commands to functions
     commands = {
         'unit': run_unit_tests,
         'integration': run_integration_tests,

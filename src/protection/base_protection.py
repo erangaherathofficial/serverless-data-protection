@@ -1,31 +1,9 @@
 """Abstract base class for protection strategies."""
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from typing import Optional
 
 from src.policy.policy_parser import ProtectionOptions
-
-
-@dataclass
-class ProtectionResult:
-    """Result of applying protection to a value."""
-
-    original_value: str
-    protected_value: str
-    method: str
-    reversible: bool
-    metadata: dict
-
-    def to_dict(self) -> dict:
-        """Convert to dictionary."""
-        return {
-            'original_length': len(self.original_value),
-            'protected_length': len(self.protected_value),
-            'method': self.method,
-            'reversible': self.reversible,
-            'metadata': self.metadata
-        }
 
 
 class BaseProtection(ABC):
@@ -72,24 +50,6 @@ class BaseProtection(ABC):
         """
         ...
 
-    def protect_with_result(self, value: str) -> ProtectionResult:
-        """Apply protection and return detailed result.
-
-        Args:
-            value: The value to protect
-
-        Returns:
-            ProtectionResult with metadata
-        """
-        protected = self.protect(value)
-        return ProtectionResult(
-            original_value=value,
-            protected_value=protected,
-            method=self.method_name,
-            reversible=self.is_reversible,
-            metadata=self._get_metadata(value, protected)
-        )
-
     def unprotect(self, value: str) -> str:
         """Reverse the protection if possible.
 
@@ -114,27 +74,6 @@ class BaseProtection(ABC):
         Override in subclasses that support reversal.
         """
         raise NotImplementedError()
-
-    def _get_metadata(self, original: str, protected: str) -> dict:
-        """Get metadata about the protection operation.
-
-        Override in subclasses to provide method-specific metadata.
-        """
-        return {
-            'original_length': len(original),
-            'protected_length': len(protected)
-        }
-
-    def validate_input(self, value: str) -> bool:
-        """Validate input value before protection.
-
-        Args:
-            value: Value to validate
-
-        Returns:
-            True if valid
-        """
-        return isinstance(value, str)
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(method={self.method_name})"

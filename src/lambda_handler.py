@@ -5,10 +5,12 @@ import logging
 import os
 import traceback
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any, Optional
 from urllib.parse import unquote_plus
 
 from src.aws.client_manager import get_client_manager
+from src.handlers.handler_factory import HandlerFactory, get_handler
 from src.pipeline.pipeline_orchestrator import (
     PipelineOrchestrator,
     PipelineResult,
@@ -24,7 +26,7 @@ _pipeline: Optional[PipelineOrchestrator] = None
 class ProcessingError(Exception):
     """Custom exception for processing errors."""
 
-    def __init__(self, message: str, bucket: str = '', key: str = ''):
+    def __init__(self, message: str, bucket: str = '', key: str = '') -> None:
         super().__init__(message)
         self.bucket = bucket
         self.key = key
@@ -42,19 +44,21 @@ def get_pipeline() -> PipelineOrchestrator:
 
 
 def _normalize_event(event: dict) -> list[dict]:
-    """Normalize S3 or EventBridge events to a common record format.
+    """Normalize S3 or EventBridge events to flat ``{bucket, key}`` records.
 
-    Handles both direct S3 event notifications and EventBridge events.
-    EventBridge events have a different structure that needs to be converted.
-
-    Args:
-        event: Raw Lambda event (S3 or EventBridge format)
-
-    Returns:
-        List of normalized records in S3 event format
+    Direct S3 event notifications URL-encode the object key; EventBridge S3
+    events deliver the key already decoded. ``unquote_plus`` is therefore
+    applied only on the Records path so a literal ``+`` in an EventBridge key
+    is not silently decoded to a space.
     """
     if 'Records' in event:
-        return event['Records']
+        return [
+            {
+                'bucket': r['s3']['bucket']['name'],
+                'key': unquote_plus(r['s3']['object']['key']),
+            }
+            for r in event['Records']
+        ]
 
     if event.get('source') == 'aws.s3' and 'detail' in event:
         detail = event['detail']
@@ -62,12 +66,7 @@ def _normalize_event(event: dict) -> list[dict]:
         object_key = detail.get('object', {}).get('key', '')
 
         if bucket_name and object_key:
-            return [{
-                's3': {
-                    'bucket': {'name': bucket_name},
-                    'object': {'key': object_key}
-                }
-            }]
+            return [{'bucket': bucket_name, 'key': object_key}]
 
     logger.warning(f"Unknown event format: {list(event.keys())}")
     return []
@@ -144,28 +143,26 @@ def handler(event: dict, context: Any) -> dict:
 
 
 def _process_record(record: dict, request_id: str) -> dict:
-    """Process a single S3 event record through the protection pipeline.
+    """Process a single normalized record through the protection pipeline.
 
     Args:
-        record: S3 event record
+        record: Normalized record (``{bucket, key}`` from ``_normalize_event``)
         request_id: Lambda request ID for tracing
 
     Returns:
         Processing result for this record
     """
-    s3_info = record.get('s3', {})
-    bucket = s3_info.get('bucket', {}).get('name', '')
-    key = unquote_plus(s3_info.get('object', {}).get('key', ''))
+    bucket = record.get('bucket', '')
+    key = record.get('key', '')
 
     if not bucket or not key:
         raise ProcessingError("Missing bucket or key in record", bucket, key)
 
     logger.info(f"Processing file: s3://{bucket}/{key}")
 
-    file_extension = _get_file_extension(key)
-    if file_extension not in ('.csv', '.json', '.parquet'):
+    if not HandlerFactory.is_supported(key):
         raise ProcessingError(
-            f"Unsupported file format: {file_extension}",
+            f"Unsupported file format: {key}",
             bucket, key
         )
 
@@ -176,7 +173,9 @@ def _process_record(record: dict, request_id: str) -> dict:
         file_size = len(file_content)
         logger.info(f"Downloaded file: {file_size} bytes")
     except Exception as e:
-        raise ProcessingError(f"Failed to download file: {e}", bucket, key)
+        raise ProcessingError(
+            f"Failed to download file: {e}", bucket, key
+        ) from e
 
     pipeline = get_pipeline()
     file_name = key.split('/')[-1]
@@ -195,7 +194,7 @@ def _process_record(record: dict, request_id: str) -> dict:
 
     if pipeline_result.protected_data:
         secure_key = f"protected/{key}"
-        content_type = _get_content_type(file_extension)
+        content_type = get_handler(file_name).get_content_type()
 
         try:
             client_manager.put_object(
@@ -209,8 +208,9 @@ def _process_record(record: dict, request_id: str) -> dict:
                 f"Wrote protected file: s3://{bucket_name}/{secure_key}"
             )
         except Exception as e:
-            msg = f"Failed to write protected file: {e}"
-            raise ProcessingError(msg, bucket, key)
+            raise ProcessingError(
+                f"Failed to write protected file: {e}", bucket, key
+            ) from e
     else:
         secure_key = None
         logger.warning("No protected data generated")
@@ -248,7 +248,7 @@ def _process_record(record: dict, request_id: str) -> dict:
                 for sr in pipeline_result.stage_results
             ]
         },
-        'detection': pipeline_result.detection_summary,
+        'detection': _strip_entities(pipeline_result.detection_summary),
         'protection': pipeline_result.protection_summary,
         'status': 'success',
         'request_id': request_id
@@ -291,7 +291,7 @@ def _create_audit_record(
         'duration_ms': int(pipeline_result.total_duration_ms),
         'timestamp': timestamp,
         'detection_summary': _sanitize_for_dynamodb(
-            pipeline_result.detection_summary
+            _strip_entities(pipeline_result.detection_summary)
         ),
         'protection_summary': _sanitize_for_dynamodb(
             pipeline_result.protection_summary
@@ -305,32 +305,22 @@ def _create_audit_record(
     }
 
 
+def _strip_entities(summary: Optional[dict]) -> Optional[dict]:
+    """Drop the raw `entities` list so PII is not persisted to the audit log."""
+    if not summary:
+        return summary
+    return {k: v for k, v in summary.items() if k != 'entities'}
+
+
 def _sanitize_for_dynamodb(obj: Any) -> Any:
-    """Convert floats to ints for DynamoDB compatibility."""
+    """Convert floats to Decimal for DynamoDB compatibility."""
     if isinstance(obj, float):
-        return int(obj)
+        return Decimal(str(obj))
     elif isinstance(obj, dict):
         return {k: _sanitize_for_dynamodb(v) for k, v in obj.items()}
     elif isinstance(obj, list):
         return [_sanitize_for_dynamodb(item) for item in obj]
     return obj
-
-
-def _get_file_extension(key: str) -> str:
-    """Extract file extension from S3 key."""
-    if '.' in key:
-        return '.' + key.rsplit('.', 1)[-1].lower()
-    return ''
-
-
-def _get_content_type(extension: str) -> str:
-    """Get content type for file extension."""
-    content_types = {
-        '.csv': 'text/csv',
-        '.json': 'application/json',
-        '.parquet': 'application/octet-stream'
-    }
-    return content_types.get(extension, 'application/octet-stream')
 
 
 def _build_response(status_code: int, message: str,
